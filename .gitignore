@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+
+# builds and caches
+dist/
+.next/
+.turbo/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+playwright-report/
+test-results/
+
+# env files (commit only the examples)
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+
+# os / editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/

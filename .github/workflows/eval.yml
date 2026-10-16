@@ -1,0 +1,60 @@
+# RAG eval: scores answer quality against the eval set in evals/.
+# Runs weekly, manually, or on a PR labelled "run-eval" (it calls a paid LLM API, so not on every PR).
+# Disabled until T14: set repository variable EVAL_ENABLED=true and secret LLM_API_KEY.
+name: RAG Eval
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: Score answers on the eval set
+    if: >-
+      vars.EVAL_ENABLED == 'true' &&
+      (github.event_name != 'pull_request' || github.event.label.name == 'run-eval')
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: supportpilot
+          POSTGRES_PASSWORD: supportpilot
+          POSTGRES_DB: supportpilot_eval
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U supportpilot" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      DATABASE_URL: postgres://supportpilot:supportpilot@localhost:5432/supportpilot_eval
+      REDIS_URL: redis://localhost:6379
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY || secrets.LLM_API_KEY }}
+      EVAL_MIN_SCORE: ${{ vars.EVAL_MIN_SCORE || '0.80' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate && pnpm db:seed
+      - name: Run eval
+        run: pnpm eval --report evals/report.md --min-score "$EVAL_MIN_SCORE"
+      - name: Publish report
+        if: always()
+        run: '[ -f evals/report.md ] && cat evals/report.md >> "$GITHUB_STEP_SUMMARY" || true'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: evals/report.md
+          if-no-files-found: ignore

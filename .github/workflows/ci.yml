@@ -1,0 +1,204 @@
+# CI: runs on every pull request and every push to main.
+# Stages: detect -> docs check -> quality (lint, types, unit) -> integration (real Postgres + Redis)
+#         -> build (+ widget size budget) -> docker build -> e2e
+# Jobs that need app code are skipped until T01 creates pnpm-lock.yaml, so the pipeline is green from day one.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  WIDGET_MAX_GZIP_BYTES: '61440' # 60 KB budget for widget.js
+
+jobs:
+  detect:
+    name: Detect what exists
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.check.outputs.code }}
+      docker: ${{ steps.check.outputs.docker }}
+      e2e: ${{ steps.check.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          [ -f pnpm-lock.yaml ] && echo "code=true" >> "$GITHUB_OUTPUT" || echo "code=false" >> "$GITHUB_OUTPUT"
+          [ -f apps/api/Dockerfile ] && echo "docker=true" >> "$GITHUB_OUTPUT" || echo "docker=false" >> "$GITHUB_OUTPUT"
+          [ -f playwright.config.ts ] && echo "e2e=true" >> "$GITHUB_OUTPUT" || echo "e2e=false" >> "$GITHUB_OUTPUT"
+          [ -f pnpm-lock.yaml ] || echo "::notice::No pnpm-lock.yaml yet (before T01). Code jobs are skipped."
+
+  docs:
+    name: Docs in sync with tasks.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate tasks.json and regenerate markdown
+        run: |
+          python -m json.tool docs/plan/tasks.json > /dev/null
+          python scripts/progress.py sync --skip-xlsx --skip-docx
+      - name: Fail if PLAN.md / README.md were not synced
+        run: |
+          if ! git diff --exit-code -- docs/PLAN.md README.md; then
+            echo "::error::Run 'python scripts/progress.py sync' and commit the result."
+            exit 1
+          fi
+
+  quality:
+    name: Lint, typecheck, unit tests
+    needs: detect
+    if: needs.detect.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version read from "packageManager" in package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run lint typecheck
+      - run: pnpm turbo run test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: '**/coverage/**'
+          if-no-files-found: ignore
+          retention-days: 7
+
+  integration:
+    name: Integration tests (Postgres + pgvector, Redis)
+    needs: detect
+    if: needs.detect.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: supportpilot
+          POSTGRES_PASSWORD: supportpilot
+          POSTGRES_DB: supportpilot_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U supportpilot"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://supportpilot:supportpilot@localhost:5432/supportpilot_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-secret
+      LLM_PROVIDER: mock # integration tests never call a paid API
+      EMBEDDING_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm turbo run test:integration
+
+  build:
+    name: Build all apps
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build
+      - name: Widget bundle size budget
+        run: |
+          f=apps/widget/dist/widget.js
+          if [ ! -f "$f" ]; then echo "::notice::widget.js not built yet (before T08)"; exit 0; fi
+          size=$(gzip -9 -c "$f" | wc -c)
+          echo "widget.js gzipped: $size bytes (budget $WIDGET_MAX_GZIP_BYTES)" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$size" -le "$WIDGET_MAX_GZIP_BYTES" ] || { echo "::error::widget.js is over budget"; exit 1; }
+
+  docker:
+    name: Docker images build
+    needs: [detect, build, integration]
+    if: needs.detect.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [api, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: false
+          tags: supportpilot-${{ matrix.app }}:ci
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  e2e:
+    name: End-to-end (Playwright)
+    needs: [detect, build, integration]
+    if: needs.detect.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: supportpilot
+          POSTGRES_PASSWORD: supportpilot
+          POSTGRES_DB: supportpilot_e2e
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U supportpilot" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://supportpilot:supportpilot@localhost:5432/supportpilot_e2e
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-secret
+      LLM_PROVIDER: mock
+      EMBEDDING_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm db:migrate && pnpm db:seed
+      - run: pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

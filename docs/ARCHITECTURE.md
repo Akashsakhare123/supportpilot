@@ -1,0 +1,297 @@
+# SupportPilot - Architecture
+
+This document is updated whenever a task changes the design. Sections marked *(planned)* describe the target design and are confirmed as tasks complete.
+
+## 1. System overview
+
+```mermaid
+flowchart TB
+  subgraph clients[Client sites]
+    WG[widget.js<br/>Preact in Shadow DOM]
+  end
+  subgraph vercel[Vercel]
+    DB[Next.js dashboard<br/>owners, admins, agents]
+    CDN[Widget CDN<br/>versioned widget.js]
+  end
+  subgraph railway[Railway]
+    API[NestJS API<br/>REST + Socket.io gateways]
+    WK[Ingestion worker<br/>BullMQ]
+    PG[(PostgreSQL 16<br/>+ pgvector)]
+    RD[(Redis 7)]
+  end
+  EXT1[LLM + embeddings API]
+  EXT2[Stripe]
+  EXT3[Object storage<br/>S3 / R2]
+
+  CDN -. serves .-> WG
+  WG <-->|"WebSocket /widget (public key)"| API
+  DB <-->|"HTTPS + WebSocket /agent (JWT)"| API
+  API <--> PG
+  API <--> RD
+  RD -- jobs --> WK
+  WK --> PG
+  WK --> EXT1
+  API --> EXT1
+  API <-->|"Checkout, Portal, webhooks"| EXT2
+  API --> EXT3
+  WK --> EXT3
+```
+
+| Component | Responsibility |
+|---|---|
+| **Widget** | Branded chat UI on the client's site. Connects with the tenant's public key and an anonymous visitor id. |
+| **Dashboard** | Signup, onboarding, knowledge base, agent inbox, analytics, settings, billing. |
+| **API** | Auth, tenants, documents, chat (RAG), conversations, handoff, analytics, billing webhooks. One `ChatService` serves both the socket gateway and the REST/SSE endpoint. |
+| **Worker** | Extract -> chunk -> embed -> store, off the request path, with retries. |
+| **PostgreSQL + pgvector** | All relational data and embeddings in one database. |
+| **Redis** | BullMQ queues, Socket.io adapter (multi-instance fan-out), presence, rate limits, analytics cache. |
+
+## 2. Chat flow
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant C as Customer (widget)
+  participant G as API socket gateway
+  participant S as ChatService
+  participant V as pgvector
+  participant L as LLM
+  participant A as Agent inbox
+
+  C->>G: connect (public key, visitor id)
+  G->>G: resolve tenant, check allowed origin, rate limit
+  C->>G: message:send
+  G->>S: handle(tenantId, conversationId, text)
+  alt conversation status = human
+    S-->>A: message:new (AI stays out)
+  else status = ai
+    S->>S: redact PII, check injection patterns
+    S->>V: top-k chunks WHERE tenant_id = :tenantId
+    S->>L: prompt (rules + chunks as data + history)
+    L-->>C: message:delta (streamed tokens)
+    S->>S: confidence = f(similarity, self-rating)
+    alt confidence >= threshold
+      S-->>C: message:done (sources, confidence)
+    else low confidence or "talk to a human"
+      S->>S: status ai -> waiting
+      S-->>C: handoff:waiting
+      S-->>A: conversation:needs_agent
+    end
+  end
+```
+
+1. Customer opens the widget and connects over WebSocket, identified by the tenant's public key.
+2. The message goes to the backend, which embeds it and searches pgvector for the top chunks from that tenant's docs.
+3. The LLM answers using only those chunks and returns a confidence score and sources.
+4. High confidence: the answer is sent. Low confidence, or the customer asks for a human: the conversation is flagged *needs agent* and appears in the agent inbox in real time.
+5. The agent replies from the dashboard; the AI stays out of that conversation until it is handed back.
+
+## 3. Knowledge ingestion pipeline
+
+```mermaid
+flowchart LR
+  U[Upload PDF / text / URL] --> V{Validate<br/>size, MIME, SSRF}
+  V -- ok --> D[(documents<br/>status = queued)]
+  D --> Q[[BullMQ ingestion queue]]
+  Q --> E[Extract text]
+  E --> CH[Chunk<br/>500-800 tokens, overlap]
+  CH --> EM[Embed in batches<br/>retry + backoff]
+  EM --> UP[(document_chunks<br/>vector + tenant_id)]
+  UP --> R[status = ready]
+  E & CH & EM -- error --> F[status = failed + reason]
+```
+
+- Re-indexing replaces a document's chunks inside one transaction, so search never sees a half-indexed document.
+- Embeddings are cached by content hash to save API cost on re-index.
+- Vector index: HNSW with `vector_cosine_ops`; every search filters on `tenant_id`.
+
+## 4. Conversation state machine (handoff)
+
+```mermaid
+stateDiagram-v2
+  [*] --> ai
+  ai --> waiting: low confidence or talk to a human
+  waiting --> human: agent claims
+  waiting --> closed: no agent, email captured
+  human --> ai: agent hands back
+  human --> closed: agent closes
+  ai --> closed: customer ends / timeout
+  closed --> [*]
+```
+
+- All transitions go through one `HandoffService`; invalid transitions throw and are unit-tested.
+- While `status = human`, the RAG pipeline is skipped entirely for that conversation.
+- Threshold is per tenant (default `0.55`). Two low-confidence answers in a row also trigger a handoff.
+
+**Confidence score** *(planned, tuned with the eval set in T14)*
+
+```
+retrieval = mean cosine similarity of the cited chunks (0-1)
+self      = model's own 0-1 rating, returned in structured metadata
+confidence = 0.6 * retrieval + 0.4 * self
+           = 0 if the model reports "not in context"
+```
+
+## 5. Data model
+
+```mermaid
+erDiagram
+  tenants ||--o{ users : has
+  tenants ||--o{ documents : owns
+  documents ||--o{ document_chunks : split_into
+  tenants ||--o{ conversations : has
+  conversations ||--o{ messages : contains
+  users ||--o{ conversations : "assigned agent"
+  tenants ||--o| subscriptions : billed_by
+  tenants ||--o{ usage_events : records
+
+  tenants {
+    uuid id PK
+    text name
+    text plan
+    text public_key UK
+    jsonb branding
+    jsonb allowed_domains
+    real handoff_threshold
+  }
+  users {
+    uuid id PK
+    uuid tenant_id FK
+    text email UK
+    text password_hash
+    text role "owner, admin, agent"
+  }
+  documents {
+    uuid id PK
+    uuid tenant_id FK
+    text title
+    text source_type "pdf, text, url"
+    text source
+    text status "queued, processing, ready, failed"
+  }
+  document_chunks {
+    uuid id PK
+    uuid document_id FK
+    uuid tenant_id FK
+    text content
+    vector embedding
+    jsonb metadata
+  }
+  conversations {
+    uuid id PK
+    uuid tenant_id FK
+    text customer_ref
+    text status "ai, waiting, human, closed"
+    uuid assigned_agent_id FK
+  }
+  messages {
+    uuid id PK
+    uuid conversation_id FK
+    text sender_type "customer, ai, agent"
+    text content
+    jsonb sources
+    real confidence
+  }
+  subscriptions {
+    uuid id PK
+    uuid tenant_id FK
+    text stripe_customer_id
+    text stripe_subscription_id
+    text plan
+    text status
+  }
+  usage_events {
+    bigint id PK
+    uuid tenant_id FK
+    text type
+    timestamptz created_at
+  }
+```
+
+`document_chunks.tenant_id` is denormalised on purpose: vector search filters on it directly, without a join.
+
+## 6. Multi-tenancy
+
+**Rule: every query is scoped by `tenant_id`.** It is enforced in three layers:
+
+| Layer | How | Catches |
+|---|---|---|
+| 1. Request context | Tenant id comes only from the verified JWT (dashboard) or the public key (widget), stored in a request-scoped `TenantContext`. Never read from the body or query string. | Spoofed tenant ids |
+| 2. Scoped data access | Repository functions take `tenantId` as a required argument; there is no unscoped query helper. | Forgotten `WHERE` clauses |
+| 3. Postgres RLS *(T15)* | Row-Level Security policies on every tenant table, using `SET LOCAL app.tenant_id` per transaction. | Bugs that slip past layers 1-2 |
+
+The tenant isolation test suite (T14) creates two tenants and asserts that no endpoint, socket event or search ever returns the other tenant's data.
+
+## 7. Real-time events *(planned, contract lives in `packages/shared`)*
+
+| Namespace | Event | Direction | Payload |
+|---|---|---|---|
+| `/widget` | `message:send` | client -> server | text |
+| `/widget` | `message:delta` / `message:done` | server -> client | token / final message with sources + confidence |
+| `/widget` | `handoff:waiting` / `handoff:agent_joined` | server -> client | agent display name |
+| both | `typing:start` / `typing:stop` | both | conversationId |
+| `/agent` | `conversation:new` / `conversation:updated` | server -> client | conversation summary |
+| `/agent` | `conversation:needs_agent` | server -> client | conversation summary, reason |
+| `/agent` | `conversation:claim` / `conversation:handback` / `conversation:close` | client -> server | conversationId |
+| `/agent` | `presence:update` | both | agentId, online / away / offline |
+
+Rooms: `tenant:{id}` (all agents of a tenant) and `conversation:{id}` (customer + assigned agent).
+
+## 8. Security
+
+| Threat | Control | Task |
+|---|---|---|
+| Cross-tenant data access | 3-layer tenancy (above) + isolation tests | T02, T14, T15 |
+| Credential theft | argon2 hashes, 15-min access tokens, rotating httpOnly refresh cookie | T02 |
+| Widget embedded on a foreign site | Allowed-domains origin check on connect | T03, T08 |
+| SSRF via URL ingestion | DNS resolve + block private / loopback / metadata IP ranges, size + time limits | T04 |
+| Malicious uploads | Size limit, MIME + magic-byte check, parsing in the worker | T04 |
+| Prompt injection | User input and retrieved docs passed as delimited untrusted data; system prompt never echoed; pattern checks; eval set includes attacks | T07, T15 |
+| PII leakage | Redaction before LLM calls and in logs | T15 |
+| Abuse / cost attacks | Per-IP and per-tenant rate limits, plan limits | T13, T15 |
+| Forged billing events | Stripe signature verification, idempotent by event id | T13 |
+
+## 9. Repository layout
+
+```
+supportpilot/
+├─ apps/
+│  ├─ api/          NestJS: REST + Socket.io gateways (health today; auth, tenants, chat... next)
+│  ├─ worker/       BullMQ worker (ingestion queue)
+│  ├─ dashboard/    Next.js App Router + Tailwind v4
+│  └─ widget/       Preact + Vite library build -> dist/widget.js (Shadow DOM)
+├─ packages/
+│  ├─ db/           Drizzle client, schema, SQL migrations, migrate + seed scripts
+│  └─ shared/       zod schemas, env parsing, queue names, shared types (browser-safe index + /node entry)
+├─ infra/postgres/  init.sql (creates the integration-test database)
+├─ docs/            PLAN, ARCHITECTURE, PIPELINE, WORKFLOW, PROGRESS, plan/tasks.json
+├─ scripts/         progress.py (status sync), build_docx.py (Word doc)
+├─ .github/         workflows (ci, deploy, eval), PR template, dependabot
+├─ docker-compose.yml          Postgres 16 + pgvector, Redis 7
+├─ turbo.json, pnpm-workspace.yaml, tsconfig.base.json, eslint.config.mjs (shared by every package)
+└─ .env.example
+```
+
+**How packages are consumed:** `shared` and `db` are built with tsup to CommonJS + ESM with type declarations, so the
+NestJS API (CommonJS, `NodeNext` resolution), the worker, Next.js and Vite all import the same build. Turborepo builds
+them first (`dependsOn: ["^build"]`). `@supportpilot/shared/node` holds server-only helpers so the browser bundles
+never pull in `node:fs`.
+
+## 10. Key decisions
+
+| # | Decision | Alternatives | Why |
+|---|---|---|---|
+| D1 | pnpm + Turborepo monorepo | Separate repos, Nx | One PR can change API + widget + types together; Turborepo caching keeps CI fast. |
+| D2 | NestJS | Express | Modules, DI, guards and gateways give a clear structure that is easy to explain. |
+| D3 | PostgreSQL + pgvector | Pinecone, Weaviate | One database for relational data and vectors; tenant filter and similarity in one query; no extra vendor. |
+| D4 | Drizzle ORM | Prisma, TypeORM | First-class `vector` column type and SQL-like queries; Prisma needs raw SQL for pgvector. |
+| D5 | Socket.io + Redis adapter | Raw WebSocket, Pusher | Rooms, reconnection and horizontal scaling out of the box. |
+| D6 | BullMQ | In-process jobs | Retries, backoff, concurrency limits and visibility for slow embedding jobs. |
+| D7 | Preact + Shadow DOM widget | React, iframe | Small bundle; style isolation without iframe sizing / cross-frame messaging pain. |
+| D8 | Provider interfaces for LLM + embeddings | Hard-coded SDK | Swap models per cost / quality; eval set compares them. |
+| D9 | Vercel (dashboard, widget) + Railway (API, worker, DB, Redis) | Single VPS, AWS | Free / cheap tiers, Git-based deploys, managed Postgres with pgvector. |
+| D10 | Internal packages built with tsup (CJS + ESM) | Source-only TS packages | NestJS runs compiled CommonJS on Node and cannot import raw `.ts` from a package; one build works for every consumer. |
+| D11 | Jest + SWC for the API, Vitest elsewhere | One runner everywhere | Jest is NestJS's documented path; SWC keeps decorator metadata for DI and is fast. Vitest is lighter for plain TS packages. |
+| D12 | One validated env schema (zod) + repo-root `.env` | Per-app dotenv, @nestjs/config | Apps fail at startup with one readable list of missing variables; same rules for API and worker. |
+
+New decisions are added here as tasks complete (also noted in PROGRESS.md).

@@ -1,0 +1,628 @@
+{
+  "project": "SupportPilot",
+  "tagline": "AI customer support platform: multi-tenant RAG chat widget with real-time human handoff",
+  "plan_start": "2026-10-19",
+  "weeks": [
+    {
+      "week": "Week 1",
+      "dates": "Oct 19 - Oct 25",
+      "milestone": "M1 Foundation",
+      "version": "v0.1.0",
+      "outcome": "Monorepo runs locally, users can sign up as a business and log in with roles."
+    },
+    {
+      "week": "Week 2",
+      "dates": "Oct 26 - Nov 1",
+      "milestone": "M2 Knowledge base",
+      "version": "v0.2.0",
+      "outcome": "Docs (PDF / text / URL) are ingested in the background into pgvector."
+    },
+    {
+      "week": "Week 3",
+      "dates": "Nov 2 - Nov 8",
+      "milestone": "M3 AI chat MVP",
+      "version": "v0.3.0",
+      "outcome": "First demo: a script-tag widget answers from the tenant's docs with sources."
+    },
+    {
+      "week": "Week 4",
+      "dates": "Nov 9 - Nov 15",
+      "milestone": "M4 Human handoff",
+      "version": "v0.4.0",
+      "outcome": "Low-confidence chats escalate to a live agent inbox in real time."
+    },
+    {
+      "week": "Week 5",
+      "dates": "Nov 16 - Nov 22",
+      "milestone": "M5 Business features",
+      "version": "v0.5.0",
+      "outcome": "Analytics (incl. unanswered questions) and Stripe billing with plan limits."
+    },
+    {
+      "week": "Week 6",
+      "dates": "Nov 23 - Nov 29",
+      "milestone": "M6 Production ready",
+      "version": "v1.0.0",
+      "outcome": "Tested, hardened, deployed live with README, diagram and demo video."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T01",
+      "week": "Week 1",
+      "title": "Repo setup (monorepo)",
+      "notes": "Docker Compose for Postgres and Redis",
+      "status": "In progress",
+      "started": "2026-10-16",
+      "completed": null,
+      "est_hours": 4,
+      "depends": [],
+      "goal": "A pnpm + Turborepo monorepo where `docker compose up` plus `pnpm dev` runs every app locally.",
+      "subtasks": [
+        "Init pnpm workspace + Turborepo: apps/api (NestJS), apps/worker, apps/dashboard (Next.js), apps/widget (Preact + Vite), packages/db, packages/shared, packages/config",
+        "Shared tsconfig, ESLint, Prettier, Husky + lint-staged, commitlint (Conventional Commits)",
+        "docker-compose.yml: pgvector/pgvector:pg16 + redis:7 with healthchecks and named volumes",
+        "packages/db: Drizzle ORM config and first migration that enables the `vector` extension",
+        "Typed env config validated with zod; .env.example for every app",
+        "GET /health endpoint that checks Postgres and Redis",
+        "Git init, push to GitHub, first CI run goes green"
+      ],
+      "acceptance": [
+        "Fresh clone: `docker compose up -d && pnpm i && pnpm dev` starts api, dashboard and widget dev server",
+        "GET /health returns {db: ok, redis: ok}",
+        "`pnpm lint`, `pnpm typecheck`, `pnpm test` pass locally and in CI"
+      ],
+      "deliverables": [
+        "Monorepo skeleton",
+        "docker-compose.yml",
+        ".env.example files",
+        "Green CI badge"
+      ],
+      "talking_point": "Turborepo caches per package, so CI only rebuilds what actually changed."
+    },
+    {
+      "id": "T02",
+      "week": "Week 1",
+      "title": "Auth with roles",
+      "notes": "Owner / admin / agent",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 6,
+      "depends": [
+        "T01"
+      ],
+      "goal": "Secure dashboard login with role-based access; every request carries a verified tenant context.",
+      "subtasks": [
+        "tenants + users tables and migrations; argon2 password hashing",
+        "POST /auth/login, /auth/refresh, /auth/logout: 15-min access JWT + rotating refresh token in httpOnly cookie",
+        "JWT claims: sub, tenantId, role; TenantContext populated by a global guard",
+        "@Roles() decorator + RolesGuard (owner > admin > agent)",
+        "Invite flow: owner/admin invites agents by email (invite token; email printed to console in dev)",
+        "Dashboard: login page, auth middleware, role-aware navigation",
+        "Unit tests for guards; integration tests for login / refresh / logout"
+      ],
+      "acceptance": [
+        "An agent calling an admin-only endpoint gets 403 (covered by a test)",
+        "Refresh token rotation works and logout invalidates the refresh token",
+        "Password hashes are never logged or returned by any endpoint"
+      ],
+      "deliverables": [
+        "Auth module",
+        "Roles guard",
+        "Login + invite UI"
+      ],
+      "talking_point": "The tenant id comes from the verified token, never from the request body, so users cannot spoof another tenant."
+    },
+    {
+      "id": "T03",
+      "week": "Week 1",
+      "title": "Tenant onboarding",
+      "notes": "Signup, public key generation",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 5,
+      "depends": [
+        "T02"
+      ],
+      "goal": "A business signs up and gets a tenant, an owner account and a widget public key in under a minute.",
+      "subtasks": [
+        "POST /auth/signup creates tenant + owner in one DB transaction",
+        "Public key generation (pk_live_ + random) and key rotation endpoint",
+        "Branding settings (jsonb): primary color, logo, greeting, launcher position",
+        "Allowed domains list per tenant (used by the widget origin check)",
+        "Onboarding wizard: company name -> branding -> copy embed snippet",
+        "Public GET /widget/config?key=pk_... returns branding only, never secrets",
+        "Seed script: demo tenant 'Acme Bikes' with sample docs for the live demo"
+      ],
+      "acceptance": [
+        "Signup lands on a dashboard showing the embed snippet with that tenant's key",
+        "Rotating the key invalidates the old key immediately",
+        "Widget config endpoint exposes only public fields (test)"
+      ],
+      "deliverables": [
+        "Signup + onboarding wizard",
+        "Branding settings",
+        "Seed script"
+      ],
+      "talking_point": "The public key identifies the tenant; the allowed-domains check stops someone else embedding a client's widget.",
+      "standout": "Widget theming per tenant"
+    },
+    {
+      "id": "T04",
+      "week": "Week 2",
+      "title": "Knowledge base upload",
+      "notes": "PDF / text / URL",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 5,
+      "depends": [
+        "T03"
+      ],
+      "goal": "Admins add knowledge from PDF, plain text / markdown, or a public URL.",
+      "subtasks": [
+        "documents table: title, source_type (pdf/text/url), source, status (queued/processing/ready/failed), error, chunk_count",
+        "POST /documents (multipart, 10 MB limit, MIME + magic-byte check) and POST /documents/url",
+        "StorageService: local disk in dev, S3-compatible (e.g. Cloudflare R2) in prod",
+        "URL fetching with SSRF protection: http(s) only, block private / loopback / metadata IPs, size + timeout limits",
+        "Dashboard Knowledge Base page: drag-and-drop upload, status badges, delete, re-index",
+        "Enqueue an ingestion job on create (consumed by T06)"
+      ],
+      "acceptance": [
+        "PDF, TXT, MD and URL can be added from the UI and appear with status `queued`",
+        "Oversized or unsupported files are rejected with clear error messages",
+        "URLs resolving to 127.0.0.1 or 169.254.169.254 are rejected (test)"
+      ],
+      "deliverables": [
+        "Documents API",
+        "Knowledge Base page"
+      ],
+      "talking_point": "URL ingestion is an SSRF risk, so the fetcher resolves DNS and blocks private IP ranges before connecting."
+    },
+    {
+      "id": "T05",
+      "week": "Week 2",
+      "title": "Chunking and embeddings",
+      "notes": "Store in pgvector",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 6,
+      "depends": [
+        "T04"
+      ],
+      "goal": "Turn documents into searchable vector chunks, always scoped to one tenant.",
+      "subtasks": [
+        "Text extraction: PDF parser, HTML readability for URLs, raw text / markdown",
+        "Chunker: split on headings / paragraphs, ~500-800 tokens, 10-15% overlap, keep title + heading path as metadata",
+        "EmbeddingProvider interface (provider + model from env), batched calls with retry and backoff",
+        "document_chunks table with vector column, HNSW index (vector_cosine_ops) and tenant_id index",
+        "searchChunks(tenantId, embedding, k) repository function: tenant filter is mandatory",
+        "Tests: chunk boundaries and overlap; similarity search returns the expected chunk"
+      ],
+      "acceptance": [
+        "A 20-page PDF becomes embedded chunks in Postgres",
+        "Searching a known phrase returns the right chunk in the top 3",
+        "Search never returns another tenant's chunk (test)"
+      ],
+      "deliverables": [
+        "Chunker",
+        "Embedding provider",
+        "Vector search repository"
+      ],
+      "talking_point": "One Postgres holds relational data and vectors, so tenant filtering and joins happen in the same query as similarity search."
+    },
+    {
+      "id": "T06",
+      "week": "Week 2",
+      "title": "Background ingestion job",
+      "notes": "BullMQ worker",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 4,
+      "depends": [
+        "T05"
+      ],
+      "goal": "Ingestion runs off the request path and is retryable and observable.",
+      "subtasks": [
+        "BullMQ `ingestion` queue on Redis, consumed by apps/worker",
+        "Job pipeline: extract -> chunk -> embed -> upsert, updating documents.status at each step",
+        "3 retries with exponential backoff; failed jobs keep the error message",
+        "Idempotent re-index: replace old chunks in the same transaction",
+        "Live status updates in the dashboard (Redis pub/sub -> socket, polling as fallback)",
+        "Worker concurrency limit and graceful shutdown; Bull Board UI in dev"
+      ],
+      "acceptance": [
+        "Upload request returns immediately; the worker processes in the background",
+        "Killing the worker mid-job: the job retries and completes after restart",
+        "A failed document shows the reason in the UI and can be retried"
+      ],
+      "deliverables": [
+        "Worker app",
+        "Ingestion queue",
+        "Live status badges"
+      ],
+      "talking_point": "Embedding is slow and rate-limited, so it runs in a queue with retries instead of blocking the upload request."
+    },
+    {
+      "id": "T07",
+      "week": "Week 3",
+      "title": "RAG chat API",
+      "notes": "Streaming responses, source citations",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 10,
+      "depends": [
+        "T06"
+      ],
+      "goal": "Answer customer questions using only the tenant's docs, streamed token by token, with sources and a confidence score.",
+      "subtasks": [
+        "conversations + messages tables (status ai/waiting/human/closed; sources jsonb; confidence)",
+        "Pipeline: PII redaction -> embed question -> top-k chunks for the tenant -> prompt -> streamed LLM answer",
+        "Prompt rules: answer only from context, otherwise say so; context wrapped as untrusted data; last N messages as memory",
+        "Structured metadata per answer: confidence (0-1), cited chunk ids, needs_human flag",
+        "Confidence = blend of retrieval similarity and model self-rating (formula documented in ARCHITECTURE.md)",
+        "LlmProvider interface; provider and model chosen via env",
+        "POST /v1/chat with Server-Sent Events, sharing the same ChatService the socket gateway uses",
+        "Persist every message with sources + confidence; write usage_events"
+      ],
+      "acceptance": [
+        "A question covered by the docs gets a streamed answer with at least one correct citation",
+        "A question not covered gets an honest 'I don't know' with low confidence",
+        "First token arrives in under 2 seconds locally"
+      ],
+      "deliverables": [
+        "ChatService",
+        "Streaming endpoint",
+        "Confidence scorer"
+      ],
+      "talking_point": "The model can only answer from retrieved chunks and must cite them, which keeps answers grounded and auditable."
+    },
+    {
+      "id": "T08",
+      "week": "Week 3",
+      "title": "Embeddable widget",
+      "notes": "Single script tag",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 8,
+      "depends": [
+        "T07"
+      ],
+      "goal": "Any website adds one script tag and gets a branded chat bubble.",
+      "subtasks": [
+        "Preact + Vite library build to a single IIFE widget.js, target < 50 KB gzipped",
+        "Render inside Shadow DOM so host-page CSS and widget CSS never clash",
+        "Read data-key from the script tag, fetch /widget/config, apply branding",
+        "Socket.io client on the /widget namespace, authenticated with public key + anonymous visitor id",
+        "UI: launcher, chat panel, streaming text, source links, 'Talk to a human' button, reconnect state",
+        "Origin check against the tenant's allowed domains on connect",
+        "Demo host page and install snippet shown in the dashboard"
+      ],
+      "acceptance": [
+        "Pasting the snippet into a plain HTML file shows a working, branded widget",
+        "Host-page CSS does not affect the widget and vice versa",
+        "CI fails if the bundle grows beyond 60 KB gzipped"
+      ],
+      "deliverables": [
+        "widget.js bundle",
+        "Demo page",
+        "Install snippet"
+      ],
+      "talking_point": "Shadow DOM plus a tiny Preact bundle means the widget drops into any client site without breaking their styles.",
+      "standout": "Widget theming per tenant"
+    },
+    {
+      "id": "T09",
+      "week": "Week 4",
+      "title": "Agent inbox",
+      "notes": "Real-time conversation list",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 7,
+      "depends": [
+        "T07",
+        "T08"
+      ],
+      "goal": "Agents see live conversations and can jump in from the dashboard.",
+      "subtasks": [
+        "Socket.io /agent namespace with JWT auth and the Redis adapter for multiple API instances",
+        "Rooms: tenant:{id} and conversation:{id}",
+        "Inbox tabs: Needs agent / Mine / AI-handled / Closed with live unread counts",
+        "Conversation view: full history with AI sources and confidence visible to agents",
+        "Agent reply box: message saved as sender_type=agent and pushed to the widget instantly",
+        "Claim / assign conversation (assigned_agent_id), exclusive claim"
+      ],
+      "acceptance": [
+        "A new widget conversation appears in the inbox without a refresh",
+        "Two agents in two browsers see the same state; claiming is exclusive",
+        "Works with 2 API instances running (Redis adapter)"
+      ],
+      "deliverables": [
+        "Agent gateway",
+        "Inbox page",
+        "Conversation view"
+      ],
+      "talking_point": "The Redis adapter fans socket events out across API instances, so the app scales horizontally."
+    },
+    {
+      "id": "T10",
+      "week": "Week 4",
+      "title": "Handoff logic",
+      "notes": "Confidence threshold, 'talk to human'",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 6,
+      "depends": [
+        "T09"
+      ],
+      "goal": "Low-confidence or explicit requests move the chat to a human, and back to AI when done.",
+      "subtasks": [
+        "Conversation state machine: ai -> waiting -> human -> ai | closed, all transitions in one service",
+        "Triggers: confidence below tenant threshold (default 0.55), 'Talk to a human' button, intent phrases, 2 low-confidence answers in a row",
+        "Waiting state: customer sees 'Connecting you to an agent', inbox highlights and notifies",
+        "While status = human the AI pipeline is skipped for that conversation",
+        "Agent actions: hand back to AI, close conversation",
+        "No agent online: collect the customer's email and save it as an offline ticket",
+        "Tenant setting: confidence threshold slider",
+        "Unit tests for every valid and invalid transition"
+      ],
+      "acceptance": [
+        "A low-confidence question shows under 'Needs agent' within 1 second",
+        "The AI never replies while status = human (test)",
+        "Handing back to AI resumes AI answers"
+      ],
+      "deliverables": [
+        "Handoff state machine",
+        "Threshold setting",
+        "Offline ticket fallback"
+      ],
+      "talking_point": "Handoff is an explicit state machine, so every transition is validated and testable instead of scattered if-statements."
+    },
+    {
+      "id": "T11",
+      "week": "Week 4",
+      "title": "Typing, presence, history",
+      "notes": "Socket.io events",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 5,
+      "depends": [
+        "T10"
+      ],
+      "goal": "The chat feels live: typing indicators, agent presence, and history that survives reloads.",
+      "subtasks": [
+        "Typed socket event contract in packages/shared (zod) used by api, dashboard and widget",
+        "Throttled typing:start / typing:stop in both directions",
+        "Agent presence (online / away / offline) in Redis with TTL heartbeats; widget shows 'agents online'",
+        "Paginated message history on widget reopen and in the agent view",
+        "Read receipts and unread counts",
+        "Reconnect + missed-message sync (fetch since lastMessageId)"
+      ],
+      "acceptance": [
+        "Typing shows on the other side within ~300 ms",
+        "Closing and reopening the widget restores the conversation",
+        "Agent presence flips to offline when the tab closes (TTL expiry)"
+      ],
+      "deliverables": [
+        "Shared event contract",
+        "Presence service",
+        "History pagination"
+      ],
+      "talking_point": "Presence uses Redis keys with TTL heartbeats, so crashed clients go offline automatically."
+    },
+    {
+      "id": "T12",
+      "week": "Week 5",
+      "title": "Analytics dashboard",
+      "notes": "AI vs. human resolution, top questions, unanswered questions",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 7,
+      "depends": [
+        "T10"
+      ],
+      "goal": "Show the client the value of the AI and exactly which docs are missing.",
+      "subtasks": [
+        "KPIs: conversations, AI-resolved %, handoff %, avg first response time, thumbs up/down rating",
+        "Top questions: group similar questions by embedding similarity",
+        "Unanswered questions report: low-confidence / handed-off questions grouped, with an 'Add doc' shortcut",
+        "Date range filter, charts (Recharts), Redis cache for 5 minutes",
+        "CSV export"
+      ],
+      "acceptance": [
+        "Seeded demo data shows meaningful charts",
+        "Unanswered report lists questions the AI failed on, with counts",
+        "Every analytics query is tenant-scoped (test)"
+      ],
+      "deliverables": [
+        "Analytics API",
+        "Analytics page",
+        "Unanswered questions report"
+      ],
+      "talking_point": "The unanswered-questions report turns AI failures into a to-do list of docs the client should write.",
+      "standout": "Unanswered questions report"
+    },
+    {
+      "id": "T13",
+      "week": "Week 5",
+      "title": "Stripe billing and plan limits",
+      "notes": "Subscriptions and usage_events",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 8,
+      "depends": [
+        "T03",
+        "T07"
+      ],
+      "goal": "Real SaaS billing: plans, upgrades and limits enforced from usage.",
+      "subtasks": [
+        "Plans in config: Free (100 AI msgs/mo, 5 docs, 1 agent), Pro, Business",
+        "Stripe Checkout for upgrades and Customer Portal for manage / cancel",
+        "Webhook endpoint with signature verification, idempotent by event id",
+        "Handle checkout.session.completed, customer.subscription.updated / deleted, invoice.payment_failed",
+        "subscriptions table synced from webhooks (Stripe is the source of truth)",
+        "PlanLimitGuard reads monthly usage_events; at the limit the widget falls back to 'leave a message'",
+        "Billing page: current plan, usage meters, upgrade CTA"
+      ],
+      "acceptance": [
+        "Test-mode upgrade works end to end (Stripe CLI webhook forwarding)",
+        "Exceeding the Free limit blocks AI answers gracefully",
+        "A replayed webhook does not double-apply"
+      ],
+      "deliverables": [
+        "Billing module",
+        "Webhook handler",
+        "Billing page"
+      ],
+      "talking_point": "Webhooks are verified and idempotent, and plan state is derived from Stripe, never trusted from the client."
+    },
+    {
+      "id": "T14",
+      "week": "Week 6",
+      "title": "Tests",
+      "notes": "Unit, integration, eval set",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 8,
+      "depends": [
+        "T13"
+      ],
+      "goal": "Prove it works: automated tests on every PR plus a measurable answer-quality score.",
+      "subtasks": [
+        "Unit: chunker, confidence scorer, handoff state machine, guards, PII redactor (written alongside each task, consolidated here)",
+        "Integration: API against real Postgres/pgvector + Redis (CI service containers)",
+        "Tenant isolation suite: tenant A can never read tenant B's docs, chunks or conversations through any endpoint",
+        "E2E (Playwright): signup -> upload doc -> ask in widget -> handoff -> agent reply",
+        "Eval set: 30-40 questions for the demo tenant (answerable, unanswerable, injection attempts)",
+        "Eval scorer: retrieval hit@k, answer correctness, correct-refusal rate; writes a report",
+        "Coverage report; target >= 70% on core services"
+      ],
+      "acceptance": [
+        "CI runs unit + integration tests on every PR",
+        "Eval workflow publishes a score report; the baseline is recorded in docs",
+        "Isolation suite passes"
+      ],
+      "deliverables": [
+        "Test suites",
+        "Eval set + scorer",
+        "Coverage report"
+      ],
+      "talking_point": "The eval set turns 'the AI seems good' into a number that CI tracks across prompt and model changes.",
+      "standout": "Eval set"
+    },
+    {
+      "id": "T15",
+      "week": "Week 6",
+      "title": "Security hardening",
+      "notes": "Rate limiting, prompt-injection and PII safeguards",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 6,
+      "depends": [
+        "T14"
+      ],
+      "goal": "Close the gaps most portfolio projects leave open.",
+      "subtasks": [
+        "Rate limiting per IP and per tenant (Redis store) on auth, widget and chat; socket message rate limit",
+        "Prompt-injection defense: user input and retrieved docs treated as untrusted data, system prompt never echoed, pattern checks, output filter",
+        "PII redaction (emails, phones, card numbers with Luhn check) before LLM calls and in logs",
+        "Postgres Row-Level Security on tenant tables as defense in depth (app.tenant_id set per transaction)",
+        "Helmet, strict CORS, input validation everywhere, dependency audit",
+        "docs/SECURITY.md: one-page threat model"
+      ],
+      "acceptance": [
+        "A burst of 100 requests/second from one IP receives 429s",
+        "Injection prompts from the eval set do not change behavior",
+        "PII is masked in stored logs and in the LLM payload (test)",
+        "RLS blocks a cross-tenant query even with the app filter removed (test)"
+      ],
+      "deliverables": [
+        "Rate limiter",
+        "Injection + PII guards",
+        "RLS policies",
+        "SECURITY.md"
+      ],
+      "talking_point": "Tenant isolation has three layers: token-derived context, scoped repositories, and Postgres RLS as a safety net.",
+      "standout": "Prompt-injection and PII safeguards"
+    },
+    {
+      "id": "T16",
+      "week": "Week 6",
+      "title": "CI/CD and deployment",
+      "notes": "Docker, GitHub Actions, live demo",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 7,
+      "depends": [
+        "T14"
+      ],
+      "goal": "Merge to main and it is live, with no manual steps.",
+      "subtasks": [
+        "Multi-stage Dockerfiles for api and worker (node:22-alpine, non-root, small images)",
+        "Finish ci.yml: docker build check and widget bundle-size check",
+        "Dashboard + widget CDN on Vercel; api, worker, Postgres (pgvector) and Redis on Railway (Render as fallback)",
+        "deploy.yml: migrate DB -> deploy api/worker -> deploy dashboard -> smoke test /health",
+        "GitHub Environments with secrets; Vercel preview deploys for PRs",
+        "Production demo tenant seeded + public demo page",
+        "Uptime monitor and error tracking (Sentry free tier)"
+      ],
+      "acceptance": [
+        "Merge to main goes live in under 10 minutes without manual steps",
+        "Public demo URL works on desktop and mobile",
+        "Rollback steps documented in PIPELINE.md"
+      ],
+      "deliverables": [
+        "Dockerfiles",
+        "Deploy workflow",
+        "Live demo URL"
+      ],
+      "talking_point": "Every PR runs lint, types, tests against real Postgres + Redis, and a bundle-size budget before it can merge."
+    },
+    {
+      "id": "T17",
+      "week": "Week 6",
+      "title": "README, architecture diagram, demo video",
+      "notes": "Recruiter-facing polish",
+      "status": "Not started",
+      "started": null,
+      "completed": null,
+      "est_hours": 6,
+      "depends": [
+        "T16"
+      ],
+      "goal": "A recruiter understands the project in 60 seconds; a client sees something they would pay for.",
+      "subtasks": [
+        "README: hero GIF, live demo + demo login, features, diagram, stack, multi-tenancy explainer, 3-command setup, test + eval results",
+        "Architecture diagram exported as PNG/SVG (Mermaid source kept in docs)",
+        "2-3 min demo video: signup -> upload -> widget answer with sources -> handoff -> agent reply -> analytics -> billing",
+        "Portfolio case study / LinkedIn post",
+        "Client-facing one-pager (white-label pitch) and final pass on the Word project document"
+      ],
+      "acceptance": [
+        "Someone new can run the project locally by following only the README",
+        "README, demo video and live URL are linked from resume / portfolio"
+      ],
+      "deliverables": [
+        "Final README",
+        "Architecture diagram",
+        "Demo video",
+        "Client one-pager"
+      ],
+      "talking_point": "Walk through the demo video live: it shows the whole product loop in under three minutes."
+    }
+  ]
+}
