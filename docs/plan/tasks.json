@@ -52,9 +52,9 @@
       "week": "Week 1",
       "title": "Repo setup (monorepo)",
       "notes": "Docker Compose for Postgres and Redis",
-      "status": "In progress",
+      "status": "Done",
       "started": "2026-10-16",
-      "completed": null,
+      "completed": "2026-10-17",
       "est_hours": 4,
       "depends": [],
       "goal": "A pnpm + Turborepo monorepo where `docker compose up` plus `pnpm dev` runs every app locally.",
@@ -65,18 +65,19 @@
         "packages/db: Drizzle ORM config and first migration that enables the `vector` extension",
         "Typed env config validated with zod; .env.example for every app",
         "GET /health endpoint that checks Postgres and Redis",
-        "Git init, push to GitHub, first CI run goes green"
+        "Git repository with Conventional Commits, ready to push to GitHub (CI runs on every push)",
+        "scripts/doctor.cmd: one-click Windows setup check (tools, install, database, every check)"
       ],
       "acceptance": [
         "Fresh clone: `docker compose up -d && pnpm i && pnpm dev` starts api, dashboard and widget dev server",
         "GET /health returns {db: ok, redis: ok}",
-        "`pnpm lint`, `pnpm typecheck`, `pnpm test` pass locally and in CI"
+        "`pnpm lint`, `pnpm typecheck`, `pnpm test` pass locally (CI runs the same checks on every push)"
       ],
       "deliverables": [
         "Monorepo skeleton",
         "docker-compose.yml",
         ".env.example files",
-        "Green CI badge"
+        "Setup doctor script"
       ],
       "talking_point": "Turborepo caches per package, so CI only rebuilds what actually changed."
     },

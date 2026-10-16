@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SupportPilot widget demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 64px auto; padding: 0 16px; color: #222; }
+      /* Hostile host styles: the widget must not be affected (Shadow DOM). */
+      button { background: hotpink !important; font-size: 30px !important; }
+    </style>
+  </head>
+  <body>
+    <h1>Acme Bikes (demo host page)</h1>
+    <p>This page simulates a client website. The chat bubble in the corner is the SupportPilot widget.</p>
+    <script type="module" src="/src/main.tsx" data-supportpilot data-key="pk_test_demo"></script>
+  </body>
+</html>

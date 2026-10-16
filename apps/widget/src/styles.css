@@ -1,0 +1,63 @@
+:host {
+  all: initial;
+  --sp-brand: #3b3f8c;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+.sp-root {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483000;
+}
+.sp-launcher {
+  all: unset;
+  cursor: pointer;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--sp-brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  font-size: 24px;
+}
+.sp-panel {
+  position: absolute;
+  right: 0;
+  bottom: 72px;
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  background: #fff;
+  color: #1f2333;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.sp-header {
+  background: var(--sp-brand);
+  color: #fff;
+  padding: 14px 16px;
+  font-weight: 600;
+}
+.sp-body {
+  padding: 16px;
+  color: #4a4f66;
+}
+.sp-key {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: #8a8fa6;
+  margin-top: 8px;
+}

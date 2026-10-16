@@ -27,3 +27,6 @@ Thumbs.db
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea/
+
+# local tool logs (scripts/doctor)
+.claude-logs/

@@ -106,5 +106,9 @@ pnpm eval                       # RAG eval set (T14, needs an LLM key)
 
 ## Local setup notes (Windows)
 
-- Install Node 22 LTS, pnpm (`corepack enable`), Docker Desktop, Git and Python 3 (`pip install openpyxl python-docx` for the progress script).
-- Keep the code repo **outside OneDrive** (for example `C:\dev\supportpilot`): OneDrive syncing `node_modules` is slow and causes file-lock errors. The planning folder (sheet + Word doc) can stay in OneDrive; point the sync script at it with `--xlsx` / `--docx`.
+- Run `scripts\doctor.cmd` (double-click works). It checks Node 22+, pnpm, Git, Docker (and starts Docker Desktop), Python
+  + libs, then installs, starts the database, migrates and runs every check. The log goes to `.claude-logs\doctor.log`.
+- Docker Postgres uses host port **5434** because this PC also has PostgreSQL 14 and 18 installed locally.
+- The repo lives inside OneDrive. Pause OneDrive syncing while `pnpm install` runs the first time (OneDrive icon >
+  Pause syncing > 2 hours); `node_modules` holds thousands of files. Moving the repo to e.g. `C:\dev\supportpilot` later
+  is a plain folder move.

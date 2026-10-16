@@ -17,6 +17,14 @@ Newest entry first. One entry per completed task (see [WORKFLOW.md](WORKFLOW.md#
 
 <!-- NEW ENTRIES BELOW -->
 
+### 2026-10-17 · T01 Repo setup (monorepo)
+
+- **Built:** pnpm + Turborepo monorepo. `apps/api` (NestJS 11, `GET /health` checking Postgres, pgvector and Redis), `apps/worker` (BullMQ ingestion worker skeleton), `apps/dashboard` (Next.js 15 + Tailwind 4, live system-status page), `apps/widget` (Preact IIFE in Shadow DOM, 6.4 KB gzipped), `packages/db` (Drizzle, migration enabling pgvector), `packages/shared` (zod env validation, shared types). Docker Compose for PostgreSQL 16 + pgvector and Redis 7. ESLint 9, Prettier, Husky + lint-staged, commitlint. `scripts\doctor.cmd` one-click setup check for Windows.
+- **Files:** `apps/*`, `packages/*`, `docker-compose.yml`, `infra/postgres/init.sql`, `turbo.json`, `tsconfig.base.json`, `eslint.config.mjs`, `scripts/doctor.*`, `.env.example`
+- **Verify:** `scripts\doctor.cmd` (all steps pass), then `pnpm dev` and open http://localhost:4000/health -> `{"status":"ok","db":"ok","pgvector":"0.8.7","redis":"ok"}`; http://localhost:3000 shows the status card; http://localhost:5173 shows the widget bubble on a demo page with hostile CSS.
+- **Decisions:** D10-D12 in ARCHITECTURE.md. Postgres listens on host port 5434 because this PC also runs PostgreSQL 14 and 18. `db:*` scripts run through Turborepo so workspace packages are built first.
+- **Next:** T02 Auth with roles.
+
 ### 2026-10-16 · T00 Planning and project docs
 
 - **Built:** build plan with 17 tasks (subtasks, acceptance criteria, estimates, dependencies), architecture doc with diagrams, CI/CD workflows (ci, deploy, eval), development workflow, this build log, progress-sync script, and the Word project document.

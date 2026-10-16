@@ -1,0 +1,21 @@
+{
+  "name": "@supportpilot/widget",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SupportPilot embeddable chat widget: one script tag, Preact in Shadow DOM",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --port 5173",
+    "preview": "vite preview --port 5173",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "preact": "^10.26.9"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.1",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

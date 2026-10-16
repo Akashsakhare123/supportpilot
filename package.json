@@ -1,0 +1,63 @@
+{
+  "name": "supportpilot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AI customer support platform: multi-tenant RAG chat widget with real-time human handoff",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "db:generate": "turbo run generate --filter=@supportpilot/db",
+    "db:migrate": "turbo run migrate --filter=@supportpilot/db",
+    "db:seed": "turbo run seed --filter=@supportpilot/db",
+    "e2e": "echo \"E2E tests arrive in T14\"",
+    "eval": "echo \"The eval set arrives in T14\" && exit 1",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "progress": "python scripts/progress.py",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@eslint/js": "^9.28.0",
+    "eslint": "^9.28.0",
+    "eslint-config-prettier": "^10.1.5",
+    "globals": "^16.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.34.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,yml,yaml,css}": [
+      "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@swc/core",
+      "@tailwindcss/oxide",
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ],
+    "ignoredBuiltDependencies": [
+      "msgpackr-extract"
+    ]
+  }
+}
