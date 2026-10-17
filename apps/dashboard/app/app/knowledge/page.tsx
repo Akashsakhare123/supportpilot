@@ -222,7 +222,16 @@ export default function KnowledgePage() {
                   <p className="truncate text-xs text-slate-500">
                     {doc.source} {doc.sizeBytes !== null && `· ${formatBytes(doc.sizeBytes)}`}
                   </p>
-                  {doc.error && <p className="mt-1 text-xs text-rose-700">{doc.error}</p>}
+                  {doc.error && (
+                    <p
+                      className={cn(
+                        'mt-1 text-xs',
+                        doc.status === 'failed' ? 'text-rose-700' : 'text-amber-700',
+                      )}
+                    >
+                      {doc.error}
+                    </p>
+                  )}
                 </td>
                 <td className="px-6 py-3 uppercase text-slate-600">{doc.sourceType}</td>
                 <td className="px-6 py-3">

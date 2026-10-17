@@ -350,5 +350,9 @@ never pull in `node:fs`.
 | D25 | HNSW index (`vector_cosine_ops`) + `hnsw.iterative_scan = strict_order` on tenant-filtered search | IVFFlat; per-tenant tables | HNSW needs no training; iterative scan stops a small tenant losing results to the post-filter. |
 | D26 | Markdown-aware chunker (~700 tokens, ~100 overlap, never crosses a heading) with title + heading trail prepended before embedding | Fixed-size character windows | Chunks stay on one topic and carry their context, which lifts retrieval quality and gives citation locations. |
 | D27 | `searchChunks` / `replaceDocumentChunks` in `@supportpilot/db` take `tenantId` as a required argument; replace runs in one transaction | Ad-hoc queries in services | The only search entry point is tenant-scoped, so cross-tenant leakage cannot happen by accident. |
+| D28 | Ingestion pipeline is a pure function with injected repository / storage / embeddings / fetcher; BullMQ is a thin wrapper | Logic inside the BullMQ callback | Every failure path is unit-tested in milliseconds without Redis or Postgres; integration tests cover the real wiring. |
+| D29 | Two failure classes: temporary (network, 429 / 5xx) retried with backoff, permanent (no text, 404, blocked URL, broken PDF, missing file) failed at once with `UnrecoverableError` | Retry everything | Retrying a 404 three times wastes time and money and delays the user seeing the real reason. |
+| D30 | Crash safety from BullMQ job locks (stalled jobs are re-queued) plus idempotent chunk replacement | Manual "processing" timeouts | A killed worker never loses or duplicates a document; recovery needs no extra code. |
+| D31 | Worker publishes status events on Redis pub/sub; dashboard keeps 5 s polling while anything is pending | Sockets only | Works today; T09 relays the same events over Socket.io without touching the worker. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

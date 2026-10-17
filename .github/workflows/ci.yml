@@ -118,7 +118,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:migrate
-      - run: pnpm turbo run test:integration
+      # One suite at a time: the API and worker suites share the test database.
+      - run: pnpm test:integration
 
   build:
     name: Build all apps

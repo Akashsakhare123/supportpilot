@@ -19,6 +19,17 @@ export async function extractPdfText(data: Uint8Array): Promise<string> {
     .join('\n\n');
 }
 
+/** A page could not be imported. `retryable` is false when trying again cannot help (404, wrong type...). */
+export class FetchPageError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+    this.name = 'FetchPageError';
+  }
+}
+
 export interface FetchPageOptions {
   fetchImpl?: typeof fetch;
   maxBytes?: number;
@@ -52,21 +63,25 @@ export async function fetchPublicPage(
     });
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get('location');
-      if (!location) throw new Error(`Redirect without a location (${res.status})`);
+      if (!location) throw new FetchPageError(`Redirect without a location (${res.status})`, false);
       url = await checkUrl(new URL(location, url).href);
       continue;
     }
-    if (!res.ok) throw new Error(`The page returned HTTP ${res.status}`);
+    if (!res.ok) {
+      // 408 / 429 / 5xx are temporary; other 4xx (404, 403...) will not fix themselves.
+      const retryable = res.status === 408 || res.status === 429 || res.status >= 500;
+      throw new FetchPageError(`The page returned HTTP ${res.status}`, retryable);
+    }
     const type = res.headers.get('content-type') ?? '';
     if (!/text\/html|text\/plain|application\/xhtml/i.test(type)) {
-      throw new Error(`Unsupported content type: ${type || 'unknown'}`);
+      throw new FetchPageError(`Unsupported content type: ${type || 'unknown'}`, false);
     }
     const length = Number(res.headers.get('content-length') ?? 0);
-    if (length > maxBytes) throw new Error('The page is larger than 2 MB');
+    if (length > maxBytes) throw new FetchPageError('The page is larger than 2 MB', false);
     const body = await res.text();
-    if (body.length > maxBytes) throw new Error('The page is larger than 2 MB');
+    if (body.length > maxBytes) throw new FetchPageError('The page is larger than 2 MB', false);
     if (/text\/plain/i.test(type)) return { text: body.trim() };
     return htmlToText(body);
   }
-  throw new Error('Too many redirects');
+  throw new FetchPageError('Too many redirects', false);
 }

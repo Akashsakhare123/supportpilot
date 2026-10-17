@@ -1,12 +1,18 @@
 // Demo data for local development and the live demo: tenant "Acme Bikes" with one user per role.
 // Safe to run repeatedly: creates what is missing and keeps the demo tenant's settings current.
-// Sample knowledge-base docs live in seed-data/acme-bikes (ingested once T04-T06 exist).
+// The sample knowledge base in seed-data/acme-bikes is stored, chunked and embedded directly
+// (no worker needed), so the demo tenant can answer questions right after seeding.
 import { hash } from '@node-rs/argon2';
+import { createEmbeddingProvider, embedDocument } from '@supportpilot/ai';
 import { DEFAULT_BRANDING } from '@supportpilot/shared';
-import { loadDotEnv } from '@supportpilot/shared/node';
-import { eq } from 'drizzle-orm';
-import { createDb, createPool } from './index';
-import { tenants, users } from './schema';
+import { LocalFileStorage, loadDotEnv, resolveStorageDir } from '@supportpilot/shared/node';
+import { and, eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { replaceDocumentChunks } from './chunks';
+import { createDb, createPool, type Database } from './index';
+import { documents, tenants, users } from './schema';
 
 export const DEMO_PUBLIC_KEY = 'pk_test_demo';
 export const DEMO_PASSWORD = 'Password123!';
@@ -26,6 +32,64 @@ const DEMO_TENANT = {
     greeting: 'Hi! Ask me anything about Acme Bikes: sizing, delivery, returns or warranty.',
   },
 };
+
+const SEED_DOCS_DIR = path.resolve(__dirname, '../seed-data/acme-bikes');
+
+/** Title from the first markdown heading, else from the file name. */
+function titleOf(markdown: string, file: string): string {
+  const heading = /^#\s+(.+)$/m.exec(markdown)?.[1]?.trim();
+  return heading || file.replace(/\.md$/, '').replace(/[-_]+/g, ' ');
+}
+
+/** Store, chunk and embed the demo articles. Skips ones that are already ready. */
+async function seedKnowledgeBase(db: Database, tenantId: string): Promise<void> {
+  const storage = new LocalFileStorage(resolveStorageDir(process.env, __dirname));
+  const embeddings = createEmbeddingProvider(process.env);
+  const files = (await readdir(SEED_DOCS_DIR)).filter(
+    (f) => f.endsWith('.md') && f !== 'README.md',
+  );
+  let added = 0;
+  for (const file of files.sort()) {
+    const markdown = await readFile(path.join(SEED_DOCS_DIR, file), 'utf8');
+    let doc = await db.query.documents.findFirst({
+      where: and(eq(documents.tenantId, tenantId), eq(documents.source, file)),
+    });
+    if (doc?.status === 'ready' && doc.chunkCount > 0) continue;
+    if (!doc) {
+      const id = randomUUID();
+      [doc] = await db
+        .insert(documents)
+        .values({
+          id,
+          tenantId,
+          title: titleOf(markdown, file),
+          sourceType: 'text',
+          source: file,
+          storageKey: `${tenantId}/${id}.md`,
+          mimeType: 'text/markdown',
+          sizeBytes: Buffer.byteLength(markdown),
+          status: 'processing',
+        })
+        .returning();
+    }
+    // (Re)write the file so "Re-index" in the dashboard works even after .data was cleared.
+    if (doc!.storageKey) await storage.put(doc!.storageKey, Buffer.from(markdown));
+    const embedded = await embedDocument(doc!.title, markdown, embeddings);
+    await replaceDocumentChunks(db, {
+      tenantId,
+      documentId: doc!.id,
+      embeddingModel: embedded.model,
+      chunks: embedded.chunks,
+    });
+    added += 1;
+    console.log(`  knowledge base: ${doc!.title} (${embedded.chunks.length} chunks)`);
+  }
+  console.log(
+    added
+      ? `Knowledge base: ${added} article(s) embedded with ${embeddings.model}.`
+      : `Knowledge base: ${files.length} articles already ready.`,
+  );
+}
 
 async function main(): Promise<void> {
   loadDotEnv(__dirname);
@@ -69,6 +133,8 @@ async function main(): Promise<void> {
     }
     console.log(`Demo logins: ${DEMO_USERS.map((u) => u.email).join(', ')} / ${DEMO_PASSWORD}`);
     console.log(`Widget key: ${DEMO_PUBLIC_KEY}`);
+
+    await seedKnowledgeBase(db, tenant!.id);
   } finally {
     await pool.end();
   }

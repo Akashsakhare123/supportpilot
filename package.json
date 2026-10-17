@@ -14,7 +14,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:integration": "turbo run test:integration",
+    "test:integration": "turbo run test:integration --concurrency=1",
     "db:generate": "turbo run generate --filter=@supportpilot/db",
     "db:migrate": "turbo run migrate --filter=@supportpilot/db",
     "db:seed": "turbo run seed --filter=@supportpilot/db",

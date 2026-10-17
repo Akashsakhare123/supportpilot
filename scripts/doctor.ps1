@@ -145,7 +145,7 @@ function Test-DevServers {
   $timer = [Diagnostics.Stopwatch]::StartNew()
   $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "pnpm dev > `"$devLog`" 2>&1" `
     -WorkingDirectory $Root -WindowStyle Hidden -PassThru
-  $api = 0; $web = 0
+  $api = 0; $web = 0; $board = 0; $workerUp = $false
   try {
     for ($i = 0; $i -lt 60 -and ($api -ne 200 -or $web -ne 200); $i++) {
       Start-Sleep -Seconds 3
@@ -154,6 +154,12 @@ function Test-DevServers {
       # First request makes Next.js compile the page, so allow a long timeout.
       if ($api -eq 200 -and $web -ne 200) { $web = Get-HttpStatus 'http://localhost:3000/login' 60 }
     }
+    # The worker has no HTTP API; its dev-only Bull Board UI proves it started.
+    for ($j = 0; $j -lt 15 -and $api -eq 200 -and $board -ne 200; $j++) {
+      $board = Get-HttpStatus 'http://localhost:4100' 5
+      if ($board -ne 200) { Start-Sleep -Seconds 2 }
+    }
+    $workerUp = (Test-Path $devLog) -and [bool](Select-String -Path $devLog -Pattern '\[worker\] listening' -Quiet)
   } finally {
     $timer.Stop()
     & taskkill.exe /PID $proc.Id /T /F 2>&1 | Out-Null
@@ -161,16 +167,18 @@ function Test-DevServers {
     Start-Sleep -Seconds 2
   }
   if ($proc.HasExited -and ($api -ne 200 -or $web -ne 200)) { Write-Log "  pnpm dev exited early (exit code $($proc.ExitCode))" }
-  Write-Log "  API /health -> $api, dashboard /login -> $web ($([math]::Round($timer.Elapsed.TotalSeconds))s)"
-  if ($api -ne 200 -or $web -ne 200) {
+  Write-Log "  API /health -> $api, dashboard /login -> $web, worker listening -> $workerUp, Bull Board -> $board ($([math]::Round($timer.Elapsed.TotalSeconds))s)"
+  if ($api -ne 200 -or $web -ne 200 -or -not $workerUp -or $board -ne 200) {
     Write-Log "  --- last 80 lines of $devLog ---"
     if (Test-Path $devLog) { Get-Content $devLog -Tail 80 | ForEach-Object { Write-Log "  $_" } }
     Write-Host "  pnpm dev did not come up; see $devLog" -ForegroundColor Red
   } else {
-    Write-Host '  API and dashboard answered; dev servers stopped again.' -ForegroundColor Green
+    Write-Host '  API, dashboard and worker answered; dev servers stopped again.' -ForegroundColor Green
   }
   Add-Result 'Dev servers: API /health' ($api -eq 200) "HTTP $api" $timer.Elapsed.TotalSeconds
   Add-Result 'Dev servers: dashboard /login' ($web -eq 200) "HTTP $web"
+  Add-Result 'Dev servers: worker on ingestion queue' $workerUp $(if ($workerUp) { 'listening' } else { 'no "[worker] listening" line' })
+  Add-Result 'Dev servers: Bull Board :4100' ($board -eq 200) "HTTP $board"
 }
 
 # ------------------------------------------------------------------ 1. tools

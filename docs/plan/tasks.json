@@ -228,21 +228,22 @@
       "week": "Week 2",
       "title": "Background ingestion job",
       "notes": "BullMQ worker",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-17",
+      "completed": "2026-10-17",
       "est_hours": 4,
       "depends": [
         "T05"
       ],
       "goal": "Ingestion runs off the request path and is retryable and observable.",
       "subtasks": [
-        "BullMQ `ingestion` queue on Redis, consumed by apps/worker",
-        "Job pipeline: extract -> chunk -> embed -> upsert, updating documents.status at each step",
-        "3 retries with exponential backoff; failed jobs keep the error message",
+        "BullMQ `ingestion` queue on Redis, consumed by apps/worker (shared LocalFileStorage for uploads)",
+        "Job pipeline: load source -> extract -> chunk -> embed -> replace chunks, updating documents.status at each step",
+        "3 attempts with exponential backoff; permanent problems (no text, 404, blocked URL, broken PDF) fail at once via UnrecoverableError; the reason is stored and shown",
         "Idempotent re-index: replace old chunks in the same transaction",
-        "Live status updates in the dashboard (Redis pub/sub -> socket, polling as fallback)",
-        "Worker concurrency limit and graceful shutdown; Bull Board UI in dev"
+        "Status events published on Redis pub/sub (socket relay with the agent namespace in T09); dashboard polls while anything is pending",
+        "Worker concurrency limit, graceful shutdown, stalled-job recovery; Bull Board UI in dev (:4100)",
+        "Seed embeds the Acme Bikes demo articles so the demo tenant is searchable right away"
       ],
       "acceptance": [
         "Upload request returns immediately; the worker processes in the background",

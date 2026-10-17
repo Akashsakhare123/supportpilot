@@ -7,3 +7,12 @@ export const ingestionJobSchema = z.object({
 });
 
 export type IngestionJob = z.infer<typeof ingestionJobSchema>;
+
+/** Published on CHANNELS.documentStatus whenever the worker changes a document's status. */
+export interface DocumentStatusEvent {
+  tenantId: string;
+  documentId: string;
+  status: 'queued' | 'processing' | 'ready' | 'failed';
+  error: string | null;
+  chunkCount: number;
+}

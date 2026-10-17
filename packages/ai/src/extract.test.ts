@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { extractPdfText, fetchPublicPage } from './extract';
+import { extractPdfText, FetchPageError, fetchPublicPage } from './extract';
 
 const fixture = (name: string) =>
   readFileSync(new URL(`../test/fixtures/${name}`, import.meta.url));
@@ -94,5 +94,18 @@ describe('fetchPublicPage', () => {
     ).resolves.toEqual({
       text: 'Just text',
     });
+  });
+
+  it('marks 404 as permanent and 503 as worth retrying', async () => {
+    const status = (code: number) => vi.fn(async () => new Response('x', { status: code }));
+    const failure = async (code: number) =>
+      fetchPublicPage('https://shop.example/', { fetchImpl: status(code), checkUrl }).catch(
+        (error: unknown) => error,
+      );
+    const notFound = await failure(404);
+    const unavailable = await failure(503);
+    expect(notFound).toBeInstanceOf(FetchPageError);
+    expect((notFound as FetchPageError).retryable).toBe(false);
+    expect((unavailable as FetchPageError).retryable).toBe(true);
   });
 });

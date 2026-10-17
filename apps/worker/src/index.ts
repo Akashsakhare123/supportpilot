@@ -1,31 +1,84 @@
-import { QUEUES } from '@supportpilot/shared';
-import { baseEnvSchema, loadDotEnv, parseEnv } from '@supportpilot/shared/node';
-import { Worker } from 'bullmq';
+import { createEmbeddingProvider } from '@supportpilot/ai';
+import { createDb, createPool } from '@supportpilot/db';
+import { CHANNELS, QUEUES } from '@supportpilot/shared';
+import {
+  LocalFileStorage,
+  loadDotEnv,
+  redisOptionsFromUrl,
+  resolveStorageDir,
+} from '@supportpilot/shared/node';
+import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
-import { processIngestion } from './processors/ingestion';
+import type { Server } from 'node:http';
+import { loadWorkerEnv } from './env';
+import { createDocumentRepository } from './repository';
+import { createIngestionWorker } from './worker';
 
 loadDotEnv(__dirname);
-const env = parseEnv(baseEnvSchema, process.env);
+const env = loadWorkerEnv();
+const connection = redisOptionsFromUrl(env.REDIS_URL);
 
-// BullMQ requires maxRetriesPerRequest: null on the worker's connection.
-const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const pool = createPool(env.DATABASE_URL, { max: env.WORKER_CONCURRENCY + 2 });
+const publisher = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
+const embeddings = createEmbeddingProvider(process.env);
+const storage = new LocalFileStorage(resolveStorageDir(process.env, __dirname));
 
-const worker = new Worker(QUEUES.ingestion, (job) => processIngestion(job.data), {
+const worker = createIngestionWorker({
+  queueName: QUEUES.ingestion,
   connection,
-  concurrency: 2,
+  concurrency: env.WORKER_CONCURRENCY,
+  deps: {
+    repo: createDocumentRepository(createDb(pool)),
+    storage,
+    embeddings,
+    publish: (event) => publisher.publish(CHANNELS.documentStatus, JSON.stringify(event)),
+    log: (message) => console.log(`[worker] ${message}`),
+  },
 });
 
-worker.on('ready', () => console.log(`[worker] listening on queue "${QUEUES.ingestion}"`));
-worker.on('completed', (job, result) => console.log(`[worker] job ${job.id} done`, result));
-worker.on('failed', (job, error) =>
-  console.error(`[worker] job ${job?.id} failed: ${error.message}`),
+worker.on('ready', () =>
+  console.log(
+    `[worker] listening on queue "${QUEUES.ingestion}" (concurrency ${env.WORKER_CONCURRENCY}, embeddings ${embeddings.model}, storage ${storage.root})`,
+  ),
 );
+worker.on('failed', (job, error) =>
+  console.error(
+    `[worker] job ${job?.id} attempt ${job?.attemptsMade ?? '?'} failed: ${error.message}`,
+  ),
+);
+worker.on('stalled', (jobId) => console.warn(`[worker] job ${jobId} stalled, it will be retried`));
 worker.on('error', (error) => console.error(`[worker] ${error.message}`));
 
+let board: { server: Server; queue: Queue } | null = null;
+if (env.NODE_ENV !== 'production' && env.BULL_BOARD_PORT > 0) {
+  void import('./bull-board')
+    .then(({ startBullBoard }) => {
+      const queue = new Queue(QUEUES.ingestion, { connection });
+      const server = startBullBoard([queue], env.BULL_BOARD_PORT);
+      server.on('listening', () =>
+        console.log(`[worker] Bull Board: http://localhost:${env.BULL_BOARD_PORT}`),
+      );
+      server.on('error', (error) =>
+        console.warn(`[worker] Bull Board not started: ${error.message}`),
+      );
+      board = { server, queue };
+    })
+    .catch((error: unknown) => console.warn(`[worker] Bull Board not started: ${String(error)}`));
+}
+
+let stopping = false;
 async function shutdown(signal: string): Promise<void> {
+  if (stopping) return;
+  stopping = true;
   console.log(`[worker] ${signal} received, finishing active jobs...`);
+  // Graceful: waits for running jobs; anything cut off is picked up again as a stalled job.
   await worker.close();
-  await connection.quit();
+  if (board) {
+    board.server.close();
+    await board.queue.close();
+  }
+  publisher.disconnect();
+  await pool.end();
   process.exit(0);
 }
 

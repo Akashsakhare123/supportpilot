@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
   Stop every SupportPilot dev server that is still running (pnpm dev, turbo, next, nest, vite, tsx)
-  and clear the dashboard's .next cache. Use it when ports 3000 / 4000 / 5173 are stuck or the
+  and clear the dashboard's .next cache. Use it when ports 3000 / 4000 / 4100 / 5173 are stuck or the
   dashboard shows "Cannot find module" errors.
 
 .EXAMPLE
@@ -26,7 +26,7 @@ $targets = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where
   })
 
 # 2. Anything node-based still listening on the dev ports.
-foreach ($port in 3000, 4000, 5173) {
+foreach ($port in 3000, 4000, 4100, 5173) {
   $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
   foreach ($l in $listeners) {
     $p = Get-CimInstance Win32_Process -Filter "ProcessId=$($l.OwningProcess)" -ErrorAction SilentlyContinue

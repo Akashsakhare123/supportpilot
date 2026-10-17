@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[######--------------] 29%`  **5 / 17 tasks done** (26 / 108 est. hours)  
+`[#######-------------] 35%`  **6 / 17 tasks done** (30 / 108 est. hours)  
 Last update: 2026-10-17  
-**Current / next task:** T06 Background ingestion job (Not started)
+**Current / next task:** T07 RAG chat API (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -23,7 +23,7 @@ Last update: 2026-10-17
 | [T03](#t03---tenant-onboarding) | Week 1 | Tenant onboarding | Done | 2026-10-17 |
 | [T04](#t04---knowledge-base-upload) | Week 2 | Knowledge base upload | Done | 2026-10-17 |
 | [T05](#t05---chunking-and-embeddings) | Week 2 | Chunking and embeddings | Done | 2026-10-17 |
-| [T06](#t06---background-ingestion-job) | Week 2 | Background ingestion job | Not started |  |
+| [T06](#t06---background-ingestion-job) | Week 2 | Background ingestion job | Done | 2026-10-17 |
 | [T07](#t07---rag-chat-api) | Week 3 | RAG chat API | Not started |  |
 | [T08](#t08---embeddable-widget) | Week 3 | Embeddable widget | Not started |  |
 | [T09](#t09---agent-inbox) | Week 4 | Agent inbox | Not started |  |
@@ -43,7 +43,7 @@ Last update: 2026-10-17
 | Week | Dates | Milestone | Release | Outcome | Progress |
 |---|---|---|---|---|---|
 | Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
-| Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 2/3 |
+| Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 3/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 0/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 0/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
@@ -232,24 +232,25 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T06 - Background ingestion job
 
-`Not started` · est. 4 h · depends on: T05
+`Done` · est. 4 h · depends on: T05 · completed 2026-10-17
 
 **Goal:** Ingestion runs off the request path and is retryable and observable.
 
 **Subtasks**
 
-- [ ] BullMQ `ingestion` queue on Redis, consumed by apps/worker
-- [ ] Job pipeline: extract -> chunk -> embed -> upsert, updating documents.status at each step
-- [ ] 3 retries with exponential backoff; failed jobs keep the error message
-- [ ] Idempotent re-index: replace old chunks in the same transaction
-- [ ] Live status updates in the dashboard (Redis pub/sub -> socket, polling as fallback)
-- [ ] Worker concurrency limit and graceful shutdown; Bull Board UI in dev
+- [x] BullMQ `ingestion` queue on Redis, consumed by apps/worker (shared LocalFileStorage for uploads)
+- [x] Job pipeline: load source -> extract -> chunk -> embed -> replace chunks, updating documents.status at each step
+- [x] 3 attempts with exponential backoff; permanent problems (no text, 404, blocked URL, broken PDF) fail at once via UnrecoverableError; the reason is stored and shown
+- [x] Idempotent re-index: replace old chunks in the same transaction
+- [x] Status events published on Redis pub/sub (socket relay with the agent namespace in T09); dashboard polls while anything is pending
+- [x] Worker concurrency limit, graceful shutdown, stalled-job recovery; Bull Board UI in dev (:4100)
+- [x] Seed embeds the Acme Bikes demo articles so the demo tenant is searchable right away
 
 **Acceptance criteria**
 
-- [ ] Upload request returns immediately; the worker processes in the background
-- [ ] Killing the worker mid-job: the job retries and completes after restart
-- [ ] A failed document shows the reason in the UI and can be retried
+- [x] Upload request returns immediately; the worker processes in the background
+- [x] Killing the worker mid-job: the job retries and completes after restart
+- [x] A failed document shows the reason in the UI and can be retried
 
 **Deliverables:** Worker app, Ingestion queue, Live status badges  
 **Interview talking point:** Embedding is slow and rate-limited, so it runs in a queue with retries instead of blocking the upload request.
