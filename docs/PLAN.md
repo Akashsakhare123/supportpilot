@@ -12,16 +12,16 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[####----------------] 18%`  **3 / 17 tasks done** (15 / 108 est. hours)  
+`[#####---------------] 24%`  **4 / 17 tasks done** (20 / 108 est. hours)  
 Last update: 2026-10-17  
-**Current / next task:** T04 Knowledge base upload (Not started)
+**Current / next task:** T05 Chunking and embeddings (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
 | [T01](#t01---repo-setup-monorepo) | Week 1 | Repo setup (monorepo) | Done | 2026-10-17 |
 | [T02](#t02---auth-with-roles) | Week 1 | Auth with roles | Done | 2026-10-17 |
 | [T03](#t03---tenant-onboarding) | Week 1 | Tenant onboarding | Done | 2026-10-17 |
-| [T04](#t04---knowledge-base-upload) | Week 2 | Knowledge base upload | Not started |  |
+| [T04](#t04---knowledge-base-upload) | Week 2 | Knowledge base upload | Done | 2026-10-17 |
 | [T05](#t05---chunking-and-embeddings) | Week 2 | Chunking and embeddings | Not started |  |
 | [T06](#t06---background-ingestion-job) | Week 2 | Background ingestion job | Not started |  |
 | [T07](#t07---rag-chat-api) | Week 3 | RAG chat API | Not started |  |
@@ -43,7 +43,7 @@ Last update: 2026-10-17
 | Week | Dates | Milestone | Release | Outcome | Progress |
 |---|---|---|---|---|---|
 | Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
-| Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 0/3 |
+| Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 1/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 0/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 0/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
@@ -183,24 +183,25 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T04 - Knowledge base upload
 
-`Not started` · est. 5 h · depends on: T03
+`Done` · est. 5 h · depends on: T03 · completed 2026-10-17
 
 **Goal:** Admins add knowledge from PDF, plain text / markdown, or a public URL.
 
 **Subtasks**
 
-- [ ] documents table: title, source_type (pdf/text/url), source, status (queued/processing/ready/failed), error, chunk_count
-- [ ] POST /documents (multipart, 10 MB limit, MIME + magic-byte check) and POST /documents/url
-- [ ] StorageService: local disk in dev, S3-compatible (e.g. Cloudflare R2) in prod
-- [ ] URL fetching with SSRF protection: http(s) only, block private / loopback / metadata IPs, size + timeout limits
-- [ ] Dashboard Knowledge Base page: drag-and-drop upload, status badges, delete, re-index
-- [ ] Enqueue an ingestion job on create (consumed by T06)
+- [x] documents table: title, source_type (pdf/text/url), source, storage key, size, status (queued/processing/ready/failed), error, chunk_count
+- [x] POST /documents (multipart, 10 MB limit, extension + magic-byte / UTF-8 checks) and POST /documents/url
+- [x] StorageService: local disk now (STORAGE_DIR or .data/uploads, path-traversal safe); S3/R2 driver with the same interface in T16
+- [x] SSRF guard (shared): http(s) only, no credentials, DNS resolved and private / loopback / link-local / metadata ranges blocked
+- [x] Dashboard Knowledge Base page: drag-and-drop upload, URL import, status badges with auto-refresh, re-index, delete
+- [x] Ingestion job queued on create / re-index (BullMQ, 3 attempts, exponential backoff; consumed in T06)
+- [x] Tenant-scoped list / delete / re-index (other tenants' ids return 404)
 
 **Acceptance criteria**
 
-- [ ] PDF, TXT, MD and URL can be added from the UI and appear with status `queued`
-- [ ] Oversized or unsupported files are rejected with clear error messages
-- [ ] URLs resolving to 127.0.0.1 or 169.254.169.254 are rejected (test)
+- [x] PDF, TXT, MD and URL can be added from the UI and appear with status `queued`
+- [x] Oversized or unsupported files are rejected with clear error messages
+- [x] URLs resolving to 127.0.0.1 or 169.254.169.254 are rejected (test)
 
 **Deliverables:** Documents API, Knowledge Base page  
 **Interview talking point:** URL ingestion is an SSRF risk, so the fetcher resolves DNS and blocks private IP ranges before connecting.

@@ -17,6 +17,14 @@ Newest entry first. One entry per completed task (see [WORKFLOW.md](WORKFLOW.md#
 
 <!-- NEW ENTRIES BELOW -->
 
+### 2026-10-17 · T04 Knowledge base upload
+
+- **Built:** `documents` table (migration 0003). `POST /documents` (multipart, 10 MB, PDF / .txt / .md checked by extension and bytes: `%PDF-` header, valid UTF-8, no NUL), `POST /documents/url` with a shared SSRF guard (http(s) only, no credentials, DNS resolved, private / loopback / link-local / metadata ranges blocked), `GET /documents`, `POST /documents/:id/reindex`, `DELETE /documents/:id`, all tenant-scoped (other tenants' ids -> 404) and admin-only. Local `StorageService` (`.data/uploads`, path-traversal safe). Every create / re-index queues a BullMQ `ingestion` job (3 attempts, exponential backoff). Dashboard Knowledge Base page: drag-and-drop upload, URL import, status badges with auto-refresh, re-index, delete.
+- **Files:** `apps/api/src/{documents,queue,storage}/*`, `apps/api/test/documents.int-spec.ts`, `packages/shared/src/{documents,net,paths}.ts`, `packages/db/src/schema/documents.ts`, `apps/dashboard/app/app/knowledge/page.tsx`
+- **Verify:** `scripts\doctor.cmd` -> all steps pass: 40 integration tests (upload + queue job, fake PDF / .exe rejected, SSRF targets 127.0.0.1, 169.254.169.254, localhost, 10.x and file:// rejected, tenant isolation, re-index, delete, agents 403) plus unit tests for upload checks, the SSRF guard and Redis URL parsing.
+- **Decisions:** D20-D22 in ARCHITECTURE.md. BullMQ gets Redis connection options (not a client), so `queue.close()` disconnects and Jest / the API exit cleanly. Documents stay "Queued" until the worker processes them in T05-T06.
+- **Next:** T05 Chunking and embeddings.
+
 ### 2026-10-17 · T03 Tenant onboarding
 
 - **Built:** `POST /auth/signup` creates the tenant (with a `pk_live_` widget key) and its owner in one transaction and signs them in. Admin/owner settings API: `GET/PATCH /tenant` (strict zod schema: name, branding, allowed domains, onboarding flag) and `POST /tenant/public-key/rotate`. Public `GET /widget/config?key=` returns only tenant name + branding, enforces the tenant's allowed domains against the `Origin` header, and is the only CORS-open route family. `GET /` now describes the API. Dashboard: signup page, 3-step onboarding wizard (company -> branding with live preview -> domains + embed snippet) that new owners are routed to, full Settings page with key rotation, install card on the overview. The widget fetches its config and applies the tenant's colour, logo, greeting and side. Seed gives Acme Bikes branding and allowed domains; four sample help articles for the demo knowledge base are in `packages/db/seed-data/acme-bikes`.

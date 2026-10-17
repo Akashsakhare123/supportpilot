@@ -341,5 +341,8 @@ never pull in `node:fs`.
 | D17 | CORS per route: open for `/widget/*`, dashboard-only elsewhere | One global CORS list | Client websites are unknown in advance; the allowed-domains check per tenant replaces a static CORS list for widget routes. |
 | D18 | Allowed domains enforced on `Origin`, empty list = open | Always require domains | Lets a new client try the widget immediately; the dashboard nudges them to add their domain before going live. |
 | D19 | `PATCH /tenant` uses a `.strict()` zod schema | Accept and ignore extra fields | Mass-assignment protection: plan, key and ids can never be changed through the settings endpoint. |
+| D20 | One SSRF guard in `@supportpilot/shared/node`, used by the API (on submit) and the worker (before fetching) | Validate only in the API | DNS can change between submit and fetch; checking again right before connecting closes the gap. |
+| D21 | Uploads checked by extension **and** bytes (`%PDF-` header, valid UTF-8, no NUL) | Trust the browser's Content-Type | Content-Type is client-controlled; renamed binaries are rejected before they reach the parser. |
+| D22 | `StorageService` with a local-disk driver now, S3/R2 later behind the same interface | Postgres bytea, S3 from day one | Zero setup locally; production storage is a driver swap, not a refactor. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

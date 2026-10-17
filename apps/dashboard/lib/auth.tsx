@@ -128,7 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetch(`/api${path}`, {
           ...init,
           headers: {
-            ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+            // JSON bodies are strings; FormData sets its own multipart boundary header.
+            ...(typeof init.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
             ...init.headers,
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },

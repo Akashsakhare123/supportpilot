@@ -162,21 +162,22 @@
       "week": "Week 2",
       "title": "Knowledge base upload",
       "notes": "PDF / text / URL",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-17",
+      "completed": "2026-10-17",
       "est_hours": 5,
       "depends": [
         "T03"
       ],
       "goal": "Admins add knowledge from PDF, plain text / markdown, or a public URL.",
       "subtasks": [
-        "documents table: title, source_type (pdf/text/url), source, status (queued/processing/ready/failed), error, chunk_count",
-        "POST /documents (multipart, 10 MB limit, MIME + magic-byte check) and POST /documents/url",
-        "StorageService: local disk in dev, S3-compatible (e.g. Cloudflare R2) in prod",
-        "URL fetching with SSRF protection: http(s) only, block private / loopback / metadata IPs, size + timeout limits",
-        "Dashboard Knowledge Base page: drag-and-drop upload, status badges, delete, re-index",
-        "Enqueue an ingestion job on create (consumed by T06)"
+        "documents table: title, source_type (pdf/text/url), source, storage key, size, status (queued/processing/ready/failed), error, chunk_count",
+        "POST /documents (multipart, 10 MB limit, extension + magic-byte / UTF-8 checks) and POST /documents/url",
+        "StorageService: local disk now (STORAGE_DIR or .data/uploads, path-traversal safe); S3/R2 driver with the same interface in T16",
+        "SSRF guard (shared): http(s) only, no credentials, DNS resolved and private / loopback / link-local / metadata ranges blocked",
+        "Dashboard Knowledge Base page: drag-and-drop upload, URL import, status badges with auto-refresh, re-index, delete",
+        "Ingestion job queued on create / re-index (BullMQ, 3 attempts, exponential backoff; consumed in T06)",
+        "Tenant-scoped list / delete / re-index (other tenants' ids return 404)"
       ],
       "acceptance": [
         "PDF, TXT, MD and URL can be added from the UI and appear with status `queued`",

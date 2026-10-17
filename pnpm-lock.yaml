@@ -68,6 +68,9 @@ importers:
       '@supportpilot/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      bullmq:
+        specifier: ^5.53.0
+        version: 5.81.5
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7

@@ -30,3 +30,6 @@ Thumbs.db
 
 # local tool logs (scripts/doctor)
 .claude-logs/
+
+# local uploads (StorageService local driver)
+.data/

@@ -20,6 +20,7 @@
     "@node-rs/argon2": "^2.0.2",
     "@supportpilot/db": "workspace:*",
     "@supportpilot/shared": "workspace:*",
+    "bullmq": "^5.53.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "ioredis": "^5.6.1",
