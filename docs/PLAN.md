@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[#####---------------] 24%`  **4 / 17 tasks done** (20 / 108 est. hours)  
+`[######--------------] 29%`  **5 / 17 tasks done** (26 / 108 est. hours)  
 Last update: 2026-10-17  
-**Current / next task:** T05 Chunking and embeddings (Not started)
+**Current / next task:** T06 Background ingestion job (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -22,7 +22,7 @@ Last update: 2026-10-17
 | [T02](#t02---auth-with-roles) | Week 1 | Auth with roles | Done | 2026-10-17 |
 | [T03](#t03---tenant-onboarding) | Week 1 | Tenant onboarding | Done | 2026-10-17 |
 | [T04](#t04---knowledge-base-upload) | Week 2 | Knowledge base upload | Done | 2026-10-17 |
-| [T05](#t05---chunking-and-embeddings) | Week 2 | Chunking and embeddings | Not started |  |
+| [T05](#t05---chunking-and-embeddings) | Week 2 | Chunking and embeddings | Done | 2026-10-17 |
 | [T06](#t06---background-ingestion-job) | Week 2 | Background ingestion job | Not started |  |
 | [T07](#t07---rag-chat-api) | Week 3 | RAG chat API | Not started |  |
 | [T08](#t08---embeddable-widget) | Week 3 | Embeddable widget | Not started |  |
@@ -43,7 +43,7 @@ Last update: 2026-10-17
 | Week | Dates | Milestone | Release | Outcome | Progress |
 |---|---|---|---|---|---|
 | Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
-| Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 1/3 |
+| Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 2/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 0/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 0/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
@@ -208,24 +208,24 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T05 - Chunking and embeddings
 
-`Not started` · est. 6 h · depends on: T04
+`Done` · est. 6 h · depends on: T04 · completed 2026-10-17
 
 **Goal:** Turn documents into searchable vector chunks, always scoped to one tenant.
 
 **Subtasks**
 
-- [ ] Text extraction: PDF parser, HTML readability for URLs, raw text / markdown
-- [ ] Chunker: split on headings / paragraphs, ~500-800 tokens, 10-15% overlap, keep title + heading path as metadata
-- [ ] EmbeddingProvider interface (provider + model from env), batched calls with retry and backoff
-- [ ] document_chunks table with vector column, HNSW index (vector_cosine_ops) and tenant_id index
-- [ ] searchChunks(tenantId, embedding, k) repository function: tenant filter is mandatory
-- [ ] Tests: chunk boundaries and overlap; similarity search returns the expected chunk
+- [x] Text extraction: PDF (unpdf), safe URL download with HTML cleanup to markdown, raw text / markdown
+- [x] Chunker: split on headings / paragraphs, ~700 tokens, ~100 token overlap, keep title + heading path as metadata
+- [x] EmbeddingProvider interface (provider + model from env): offline local-hash default, OpenAI with batching, retry and backoff
+- [x] document_chunks table with 1536-dim vector column, HNSW index (vector_cosine_ops), tenant_id + document indexes, embedding_model
+- [x] searchChunks(tenantId, embedding, k) + replaceDocumentChunks repository functions: tenant filter is mandatory
+- [x] Tests: chunk boundaries and overlap; 20-page PDF pipeline; similarity search returns the expected chunk; tenant isolation
 
 **Acceptance criteria**
 
-- [ ] A 20-page PDF becomes embedded chunks in Postgres
-- [ ] Searching a known phrase returns the right chunk in the top 3
-- [ ] Search never returns another tenant's chunk (test)
+- [x] A 20-page PDF becomes embedded chunks in Postgres
+- [x] Searching a known phrase returns the right chunk in the top 3
+- [x] Search never returns another tenant's chunk (test)
 
 **Deliverables:** Chunker, Embedding provider, Vector search repository  
 **Interview talking point:** One Postgres holds relational data and vectors, so tenant filtering and joins happen in the same query as similarity search.

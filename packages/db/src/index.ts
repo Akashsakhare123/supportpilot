@@ -6,6 +6,7 @@ import * as schema from './schema';
 
 export { schema };
 export * from './schema';
+export * from './chunks';
 export type { Pool } from 'pg';
 export { and, asc, desc, eq, gt, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 

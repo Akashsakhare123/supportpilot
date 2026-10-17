@@ -302,7 +302,8 @@ supportpilot/
 │  ├─ dashboard/    Next.js App Router + Tailwind v4
 │  └─ widget/       Preact + Vite library build -> dist/widget.js (Shadow DOM)
 ├─ packages/
-│  ├─ db/           Drizzle client, schema, SQL migrations, migrate + seed scripts
+│  ├─ ai/           text extraction (PDF, HTML), chunker, embedding providers (server-only)
+│  ├─ db/           Drizzle client, schema, SQL migrations, migrate + seed scripts, chunk search
 │  └─ shared/       zod schemas, env parsing, queue names, shared types (browser-safe index + /node entry)
 ├─ infra/postgres/  init.sql (creates the integration-test database)
 ├─ docs/            PLAN, ARCHITECTURE, PIPELINE, WORKFLOW, PROGRESS, plan/tasks.json
@@ -344,5 +345,10 @@ never pull in `node:fs`.
 | D20 | One SSRF guard in `@supportpilot/shared/node`, used by the API (on submit) and the worker (before fetching) | Validate only in the API | DNS can change between submit and fetch; checking again right before connecting closes the gap. |
 | D21 | Uploads checked by extension **and** bytes (`%PDF-` header, valid UTF-8, no NUL) | Trust the browser's Content-Type | Content-Type is client-controlled; renamed binaries are rejected before they reach the parser. |
 | D22 | `StorageService` with a local-disk driver now, S3/R2 later behind the same interface | Postgres bytea, S3 from day one | Zero setup locally; production storage is a driver swap, not a refactor. |
+| D23 | Embeddings behind an `EmbeddingProvider` interface; built-in offline `local-hash-v1` (feature-hashed words + word pairs) by default, OpenAI `text-embedding-3-small` via `EMBEDDING_PROVIDER=openai` | Require an API key from day one | Free, deterministic local dev / tests / CI; real semantic search is one env var away. |
+| D24 | 1536-dim `vector` column + `embedding_model` stored per chunk; search filters on model | One global model, no record | Switching models never compares incompatible vectors; re-ingest migrates a tenant at its own pace. |
+| D25 | HNSW index (`vector_cosine_ops`) + `hnsw.iterative_scan = strict_order` on tenant-filtered search | IVFFlat; per-tenant tables | HNSW needs no training; iterative scan stops a small tenant losing results to the post-filter. |
+| D26 | Markdown-aware chunker (~700 tokens, ~100 overlap, never crosses a heading) with title + heading trail prepended before embedding | Fixed-size character windows | Chunks stay on one topic and carry their context, which lifts retrieval quality and gives citation locations. |
+| D27 | `searchChunks` / `replaceDocumentChunks` in `@supportpilot/db` take `tenantId` as a required argument; replace runs in one transaction | Ad-hoc queries in services | The only search entry point is tenant-scoped, so cross-tenant leakage cannot happen by accident. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

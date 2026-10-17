@@ -9,14 +9,14 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 ## Progress
 
 <!-- AUTO:PROGRESS -->
-![progress](https://img.shields.io/badge/progress-4%2F17%20tasks-3B3F8C)
+![progress](https://img.shields.io/badge/progress-5%2F17%20tasks-3B3F8C)
 
-`[#####---------------] 24%` - currently on **T05 Chunking and embeddings**
+`[######--------------] 29%` - currently on **T06 Background ingestion job**
 
 | Milestone | Release | Progress |
 |---|---|---|
 | M1 Foundation | v0.1.0 | 3/3 (done) |
-| M2 Knowledge base | v0.2.0 | 1/3 (in progress) |
+| M2 Knowledge base | v0.2.0 | 2/3 (in progress) |
 | M3 AI chat MVP | v0.3.0 | 0/2 (planned) |
 | M4 Human handoff | v0.4.0 | 0/3 (planned) |
 | M5 Business features | v0.5.0 | 0/2 (planned) |
@@ -96,7 +96,7 @@ pnpm db:seed                    # demo tenant Acme Bikes
 pnpm dev                        # api :4000, dashboard :3000, widget demo :5173, worker
 ```
 
-`pnpm dev` builds `packages/shared` and `packages/db` once, then watches the apps. If you edit those packages while it runs, also run `pnpm dev:packages` in a second terminal. If ports 3000 / 4000 / 5173 are stuck or the dashboard shows "Cannot find module" errors, run `scripts\stop-dev.cmd` and start `pnpm dev` again.
+`pnpm dev` builds `packages/shared`, `packages/db` and `packages/ai` once, then watches the apps. If you edit those packages while it runs, also run `pnpm dev:packages` in a second terminal. If ports 3000 / 4000 / 5173 are stuck or the dashboard shows "Cannot find module" errors, run `scripts\stop-dev.cmd` and start `pnpm dev` again.
 
 | URL | What |
 |---|---|

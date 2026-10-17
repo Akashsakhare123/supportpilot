@@ -17,6 +17,14 @@ Newest entry first. One entry per completed task (see [WORKFLOW.md](WORKFLOW.md#
 
 <!-- NEW ENTRIES BELOW -->
 
+### 2026-10-17 · T05 Chunking and embeddings
+
+- **Built:** new `@supportpilot/ai` package: PDF text extraction (`unpdf`), safe web-page download (SSRF check on every redirect hop, HTML / plain text only, 2 MB, 10 s) with HTML-to-markdown cleanup, markdown-aware chunker (~700 tokens, ~100 overlap, never crosses a heading, keeps the heading trail), `EmbeddingProvider` interface with an offline `local-hash-v1` provider (default, no key) and an OpenAI provider (batching, retry on 429 / 5xx), `embedDocument()` pipeline. `document_chunks` table (migration 0004): 1536-dim `vector` column, HNSW cosine index, tenant and document indexes, `embedding_model` per chunk. `replaceDocumentChunks()` (one transaction, marks the document ready) and `searchChunks()` (tenant id required, same-model vectors only, pgvector iterative scan).
+- **Files:** `packages/ai/*`, `packages/db/src/{chunks.ts,schema/chunks.ts}`, `packages/db/migrations/0004_*` (generated), `apps/api/test/search.int-spec.ts`, `.env.example` (EMBEDDING_PROVIDER, EMBEDDING_MODEL, OPENAI_API_KEY)
+- **Verify:** `scripts\doctor.cmd` -> all steps pass: unit tests for chunk boundaries / overlap, HTML cleanup, redirects to private hosts blocked, OpenAI batching + retry (fake fetch), and a 20-page PDF that becomes embedded chunks with the known phrase in the top 3; integration tests on Postgres: warranty question -> warranty chunk first, other tenant's chunks never returned, re-ingest replaces chunks, cascade delete.
+- **Decisions:** D23-D27 in ARCHITECTURE.md. No API key needed for development; set `EMBEDDING_PROVIDER=openai` and `OPENAI_API_KEY` for meaning-based search.
+- **Next:** T06 Ingestion worker (queue job -> extract -> chunk -> embed -> store, status updates).
+
 ### 2026-10-17 · T04 Knowledge base upload
 
 - **Built:** `documents` table (migration 0003). `POST /documents` (multipart, 10 MB, PDF / .txt / .md checked by extension and bytes: `%PDF-` header, valid UTF-8, no NUL), `POST /documents/url` with a shared SSRF guard (http(s) only, no credentials, DNS resolved, private / loopback / link-local / metadata ranges blocked), `GET /documents`, `POST /documents/:id/reindex`, `DELETE /documents/:id`, all tenant-scoped (other tenants' ids -> 404) and admin-only. Local `StorageService` (`.data/uploads`, path-traversal safe). Every create / re-index queues a BullMQ `ingestion` job (3 attempts, exponential backoff). Dashboard Knowledge Base page: drag-and-drop upload, URL import, status badges with auto-refresh, re-index, delete.

@@ -195,21 +195,21 @@
       "week": "Week 2",
       "title": "Chunking and embeddings",
       "notes": "Store in pgvector",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-17",
+      "completed": "2026-10-17",
       "est_hours": 6,
       "depends": [
         "T04"
       ],
       "goal": "Turn documents into searchable vector chunks, always scoped to one tenant.",
       "subtasks": [
-        "Text extraction: PDF parser, HTML readability for URLs, raw text / markdown",
-        "Chunker: split on headings / paragraphs, ~500-800 tokens, 10-15% overlap, keep title + heading path as metadata",
-        "EmbeddingProvider interface (provider + model from env), batched calls with retry and backoff",
-        "document_chunks table with vector column, HNSW index (vector_cosine_ops) and tenant_id index",
-        "searchChunks(tenantId, embedding, k) repository function: tenant filter is mandatory",
-        "Tests: chunk boundaries and overlap; similarity search returns the expected chunk"
+        "Text extraction: PDF (unpdf), safe URL download with HTML cleanup to markdown, raw text / markdown",
+        "Chunker: split on headings / paragraphs, ~700 tokens, ~100 token overlap, keep title + heading path as metadata",
+        "EmbeddingProvider interface (provider + model from env): offline local-hash default, OpenAI with batching, retry and backoff",
+        "document_chunks table with 1536-dim vector column, HNSW index (vector_cosine_ops), tenant_id + document indexes, embedding_model",
+        "searchChunks(tenantId, embedding, k) + replaceDocumentChunks repository functions: tenant filter is mandatory",
+        "Tests: chunk boundaries and overlap; 20-page PDF pipeline; similarity search returns the expected chunk; tenant isolation"
       ],
       "acceptance": [
         "A 20-page PDF becomes embedded chunks in Postgres",
