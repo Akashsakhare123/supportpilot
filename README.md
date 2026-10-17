@@ -9,15 +9,15 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 ## Progress
 
 <!-- AUTO:PROGRESS -->
-![progress](https://img.shields.io/badge/progress-6%2F17%20tasks-3B3F8C)
+![progress](https://img.shields.io/badge/progress-7%2F17%20tasks-3B3F8C)
 
-`[#######-------------] 35%` - currently on **T07 RAG chat API**
+`[########------------] 41%` - currently on **T08 Embeddable widget**
 
 | Milestone | Release | Progress |
 |---|---|---|
 | M1 Foundation | v0.1.0 | 3/3 (done) |
 | M2 Knowledge base | v0.2.0 | 3/3 (done) |
-| M3 AI chat MVP | v0.3.0 | 0/2 (planned) |
+| M3 AI chat MVP | v0.3.0 | 1/2 (in progress) |
 | M4 Human handoff | v0.4.0 | 0/3 (planned) |
 | M5 Business features | v0.5.0 | 0/2 (planned) |
 | M6 Production ready | v1.0.0 | 0/4 (planned) |

@@ -123,14 +123,22 @@ stateDiagram-v2
 - While `status = human`, the RAG pipeline is skipped entirely for that conversation.
 - Threshold is per tenant (default `0.55`). Two low-confidence answers in a row also trigger a handoff.
 
-**Confidence score** *(planned, tuned with the eval set in T14)*
+**Confidence score** *(T07; weights and calibration re-tuned with the eval set in T14)*
 
 ```
-retrieval = mean cosine similarity of the cited chunks (0-1)
-self      = model's own 0-1 rating, returned in structured metadata
+retrieval  = mean of the cited passages' cosine similarity, rescaled per embedding model
+             to 0-1 between a "floor" (unrelated) and a "ceiling" (clearly relevant):
+             local-hash-v2 0.08-0.40, text-embedding-3-small 0.20-0.55
+self       = the model's own 0-1 rating from its metadata line (0.5 if it gave none)
 confidence = 0.6 * retrieval + 0.4 * self
-           = 0 if the model reports "not in context"
+           = 0 if the model reports the context has no answer, or nothing passed the floor
+needs_human = confidence < tenant.handoff_threshold (default 0.55), or the customer asks for a person
 ```
+
+The model ends every answer with a line `@@META {"answered": bool, "confidence": 0-1, "sources": [n]}`.
+`AnswerStreamSplitter` holds back anything that could be the start of that marker, so the
+customer never sees it, and the line is parsed after the stream ends. Sources are the passages
+cited inline (`[1]`) or in the metadata.
 
 ## 5. Data model
 
@@ -180,7 +188,7 @@ erDiagram
   conversations {
     uuid id PK
     uuid tenant_id FK
-    text customer_ref
+    text visitor_id
     text status "ai, waiting, human, closed"
     uuid assigned_agent_id FK
   }
@@ -262,6 +270,24 @@ sequenceDiagram
 - **Public widget key**: identifies the tenant to `widget.js`. It is public by design (it sits in the client's HTML), so it grants nothing except reading public config and, later, chatting as an anonymous visitor of that tenant. Rotation replaces it instantly.
 - **`GET /widget/config?key=...`** returns only `{ tenantName, branding }`, cached for 60 s with `Vary: Origin`.
 - **CORS is split by route**: `/widget/*` reflects any origin without credentials; every other route only allows the dashboard origins (with credentials). The real gate for widget routes is the per-tenant **allowed domains** check on the `Origin` header (exact host or any subdomain). An empty list means "not configured yet" and allows every site, so a new workspace can test before going live.
+
+## 6d. RAG chat API (T07)
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `POST /v1/chat` | widget.js (public key + allowed domains) | Body `{ key, visitorId, conversationId?, message }`. Streams Server-Sent Events: `meta` (conversation id), `delta` (text), `done` (content, sources, confidence, needsHuman) or `error`. |
+| `POST /chat/playground` | signed-in team members | Same pipeline without a widget key, for "Test assistant" in the dashboard. |
+
+Pipeline in `ChatService.respond()` (the socket gateway in T08 / T09 calls the same method):
+
+1. Unknown widget key 404, blocked website 403, someone else's conversation 404, bad body 400. All of these are normal HTTP errors returned before the stream opens.
+2. Store the customer message as written (agents see it as written); emails, phone numbers and Luhn-valid card numbers are masked in everything sent to the AI provider.
+3. Conversation in `human` / `waiting` status: the AI stays out. "Talk to a person": a fixed handoff reply, no model call.
+4. Embed the masked question, `searchChunks` top 5 for this tenant and embedding model, and drop passages below the model's similarity floor. If none remain, reply "I couldn't find that" without calling the model (saves cost).
+5. Prompt: rules, then the last 6 messages, then `<context>` passages and the `<question>` as untrusted data (tags inside retrieved text are neutralised).
+6. Stream the answer, compute sources and confidence, store the AI message with sources, confidence and metadata (model, first-token time, latency, retrieval scores), and record a `chat.answer` usage event.
+
+Providers come from env. `LLM_PROVIDER=mock` (default) is an offline extractive stand-in that reads the same prompt and cites passages, so the whole pipeline runs and is tested without a key. `LLM_PROVIDER=openai` works with OpenAI or any OpenAI-compatible server (`OPENAI_BASE_URL`, e.g. a local Ollama). If the model call fails, the customer gets a polite fallback offering a person.
 
 ## 7. Real-time events *(planned, contract lives in `packages/shared`)*
 
@@ -354,5 +380,11 @@ never pull in `node:fs`.
 | D29 | Two failure classes: temporary (network, 429 / 5xx) retried with backoff, permanent (no text, 404, blocked URL, broken PDF, missing file) failed at once with `UnrecoverableError` | Retry everything | Retrying a 404 three times wastes time and money and delays the user seeing the real reason. |
 | D30 | Crash safety from BullMQ job locks (stalled jobs are re-queued) plus idempotent chunk replacement | Manual "processing" timeouts | A killed worker never loses or duplicates a document; recovery needs no extra code. |
 | D31 | Worker publishes status events on Redis pub/sub; dashboard keeps 5 s polling while anything is pending | Sockets only | Works today; T09 relays the same events over Socket.io without touching the worker. |
+| D32 | Server-Sent Events over `POST /v1/chat` now; the Socket.io gateway (T08 / T09) calls the same `ChatService` | WebSockets only | SSE works through every proxy and is trivial to test with plain HTTP; one service guarantees identical answers on both transports. |
+| D33 | Model metadata as a trailing `@@META {json}` line, hidden by a streaming splitter | Separate non-streamed call, JSON-only output | One call keeps first-token latency low and cost single; text still streams token by token. |
+| D34 | Confidence = 0.6 x calibrated retrieval + 0.4 x model self-rating, with per-embedding-model calibration | Similarity only, model rating only | Similarity alone misses "found related text but no answer"; self-rating alone is overconfident. Calibration makes thresholds portable across embedding models. |
+| D35 | Offline `mock-extractive-v1` LLM as the default provider | Require an API key; canned responses | Free local development and CI, deterministic tests, yet it exercises the real prompt, citations and confidence path. |
+| D36 | Mask PII in what is sent to the AI provider, keep the original for agents | Mask everything, or nothing | Customers' contact details never leave for a third-party model, while agents can still help the person. |
+| D37 | Offline embeddings bumped to `local-hash-v2` (fixed stemming); chunks keep their model name and the seed re-embeds outdated ones | Silent in-place change | Shows why `embedding_model` is stored: old and new vectors are never mixed, and re-indexing upgrades a document. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

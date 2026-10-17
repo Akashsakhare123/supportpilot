@@ -6,4 +6,7 @@ export function loadTestEnv(): void {
   process.env.NODE_ENV = 'test';
   if (process.env.DATABASE_URL_TEST) process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
   process.env.JWT_SECRET ??= 'integration-test-secret-not-for-production';
+  // Integration tests never call a paid AI API, whatever .env says.
+  process.env.LLM_PROVIDER = 'mock';
+  process.env.EMBEDDING_PROVIDER = 'local';
 }

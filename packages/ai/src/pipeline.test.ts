@@ -15,7 +15,7 @@ describe('embedDocument', () => {
     for (const page of [1, 7, 20]) expect(text).toContain(`Page ${page}:`);
 
     const doc = await embedDocument('Acme e-bike handbook', text, provider, { maxTokens: 150 });
-    expect(doc.model).toBe('local-hash-v1');
+    expect(doc.model).toBe('local-hash-v2');
     expect(doc.chunks.length).toBeGreaterThanOrEqual(5);
     for (const chunk of doc.chunks) expect(chunk.embedding).toHaveLength(1536);
 

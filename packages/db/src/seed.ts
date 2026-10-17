@@ -12,7 +12,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { replaceDocumentChunks } from './chunks';
 import { createDb, createPool, type Database } from './index';
-import { documents, tenants, users } from './schema';
+import { documentChunks, documents, tenants, users } from './schema';
 
 export const DEMO_PUBLIC_KEY = 'pk_test_demo';
 export const DEMO_PASSWORD = 'Password123!';
@@ -41,7 +41,7 @@ function titleOf(markdown: string, file: string): string {
   return heading || file.replace(/\.md$/, '').replace(/[-_]+/g, ' ');
 }
 
-/** Store, chunk and embed the demo articles. Skips ones that are already ready. */
+/** Store, chunk and embed the demo articles. Skips ones already embedded with the current model. */
 async function seedKnowledgeBase(db: Database, tenantId: string): Promise<void> {
   const storage = new LocalFileStorage(resolveStorageDir(process.env, __dirname));
   const embeddings = createEmbeddingProvider(process.env);
@@ -54,7 +54,14 @@ async function seedKnowledgeBase(db: Database, tenantId: string): Promise<void> 
     let doc = await db.query.documents.findFirst({
       where: and(eq(documents.tenantId, tenantId), eq(documents.source, file)),
     });
-    if (doc?.status === 'ready' && doc.chunkCount > 0) continue;
+    if (doc?.status === 'ready' && doc.chunkCount > 0) {
+      // Up to date unless the chunks were embedded by another model (e.g. after an upgrade).
+      const sample = await db.query.documentChunks.findFirst({
+        where: eq(documentChunks.documentId, doc.id),
+        columns: { embeddingModel: true },
+      });
+      if (sample?.embeddingModel === embeddings.model) continue;
+    }
     if (!doc) {
       const id = randomUUID();
       [doc] = await db

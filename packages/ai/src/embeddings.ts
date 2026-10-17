@@ -28,9 +28,26 @@ function fnv1a(text: string): number {
   return hash;
 }
 
-/** Very light stemming so "returns" / "returned" / "return" share a feature. */
-function stem(word: string): string {
-  return word.replace(/(ing|ed|es|s)$/, '').replace(/(.)\1$/, '$1') || word;
+/**
+ * Light stemming so "frame" / "frames" / "framed" and "ship" / "shipping" share a feature.
+ * (v1 stripped "es" everywhere, so "frames" and "frame" did not match; fixed in local-hash-v2.)
+ */
+export function stem(word: string): string {
+  if (word.length <= 3 || /^\d/.test(word)) return word;
+  let w = word;
+  if (w.endsWith('ies') && w.length > 4) w = `${w.slice(0, -3)}y`;
+  else if (/(sses|xes|ches|shes|zes)$/.test(w)) w = w.slice(0, -2);
+  else if (w.endsWith('s') && !/(ss|us|is)$/.test(w)) w = w.slice(0, -1);
+  if (w.endsWith('ing') && w.length > 5) w = w.slice(0, -3);
+  else if (w.endsWith('ed') && w.length > 4) w = w.slice(0, -2);
+  w = w.replace(/([^aeiouls])\1$/, '$1');
+  if (w.endsWith('e') && w.length > 3) w = w.slice(0, -1);
+  return w || word;
+}
+
+/** Lower-cased, stop-word-free, lightly stemmed words: the features of the offline models. */
+export function keywords(text: string): string[] {
+  return (text.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => !STOPWORDS.has(w)).map(stem);
 }
 
 /**
@@ -39,15 +56,13 @@ function stem(word: string): string {
  * model (EMBEDDING_PROVIDER=openai) for meaning-based search.
  */
 export class LocalHashEmbeddings implements EmbeddingProvider {
-  readonly model = 'local-hash-v1';
+  readonly model = 'local-hash-v2';
   readonly dimensions = EMBEDDING_DIMENSIONS;
 
   async embed(texts: string[]): Promise<number[][]> {
     return texts.map((text) => {
       const vector = new Array<number>(this.dimensions).fill(0);
-      const words = (text.toLowerCase().match(/[a-z0-9]+/g) ?? [])
-        .filter((w) => !STOPWORDS.has(w))
-        .map(stem);
+      const words = keywords(text);
       const add = (feature: string, weight: number) => {
         const h = fnv1a(feature);
         vector[h % this.dimensions]! += h & 0x80000000 ? -weight : weight;

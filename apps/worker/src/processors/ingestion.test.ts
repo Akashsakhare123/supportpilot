@@ -91,7 +91,7 @@ describe('processIngestion', () => {
     const result = await processIngestion(job(), t.deps);
     expect(result).toEqual({ documentId: DOC, status: 'ready', chunks: 1 });
     expect(t.history).toEqual(['processing', 'ready']);
-    expect(t.row().model).toBe('local-hash-v1');
+    expect(t.row().model).toBe('local-hash-v2');
     expect(t.row().chunks[0]!.content).toBe('Return any bike within 30 days.'); // BOM stripped
     expect(t.row().chunks[0]!.headingPath).toEqual(['Returns']);
     expect(t.events.map((e) => e.status)).toEqual(['processing', 'ready']);

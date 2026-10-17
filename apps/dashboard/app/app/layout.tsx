@@ -12,6 +12,7 @@ const NAV: { href: string; label: string; minRole: Role }[] = [
   { href: '/app', label: 'Overview', minRole: 'agent' },
   { href: '/app/inbox', label: 'Inbox', minRole: 'agent' },
   { href: '/app/knowledge', label: 'Knowledge base', minRole: 'admin' },
+  { href: '/app/playground', label: 'Test assistant', minRole: 'agent' },
   { href: '/app/team', label: 'Team', minRole: 'admin' },
   { href: '/app/settings', label: 'Settings', minRole: 'admin' },
   { href: '/app/billing', label: 'Billing', minRole: 'owner' },

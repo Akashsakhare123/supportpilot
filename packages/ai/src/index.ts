@@ -3,3 +3,6 @@ export * from './embeddings';
 export * from './extract';
 export * from './html';
 export * from './pipeline';
+export * from './confidence';
+export * from './llm';
+export * from './prompt';

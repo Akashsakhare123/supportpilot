@@ -262,23 +262,24 @@
       "week": "Week 3",
       "title": "RAG chat API",
       "notes": "Streaming responses, source citations",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-17",
+      "completed": "2026-10-17",
       "est_hours": 10,
       "depends": [
         "T06"
       ],
       "goal": "Answer customer questions using only the tenant's docs, streamed token by token, with sources and a confidence score.",
       "subtasks": [
-        "conversations + messages tables (status ai/waiting/human/closed; sources jsonb; confidence)",
-        "Pipeline: PII redaction -> embed question -> top-k chunks for the tenant -> prompt -> streamed LLM answer",
-        "Prompt rules: answer only from context, otherwise say so; context wrapped as untrusted data; last N messages as memory",
-        "Structured metadata per answer: confidence (0-1), cited chunk ids, needs_human flag",
-        "Confidence = blend of retrieval similarity and model self-rating (formula documented in ARCHITECTURE.md)",
-        "LlmProvider interface; provider and model chosen via env",
-        "POST /v1/chat with Server-Sent Events, sharing the same ChatService the socket gateway uses",
-        "Persist every message with sources + confidence; write usage_events"
+        "conversations + messages + usage_events tables (status ai/waiting/human/closed; sources jsonb; confidence; metadata)",
+        "Pipeline: PII masking -> embed question -> tenant top-k above the similarity floor -> grounded prompt -> streamed answer",
+        "Prompt rules: answer only from context, otherwise say so; passages and question wrapped as untrusted data; last 6 messages as memory",
+        "Structured metadata per answer (@@META line hidden by a streaming splitter): answered, self-confidence, cited passages",
+        "Confidence = 0.6 x calibrated retrieval + 0.4 x self-rating; needs_human below the tenant threshold or on 'talk to a person'",
+        "LlmProvider interface: offline mock (default) and OpenAI-compatible (OpenAI, Ollama...) chosen via env",
+        "POST /v1/chat with Server-Sent Events + POST /chat/playground, both through one ChatService",
+        "Persist every message with sources + confidence; write a chat.answer usage event",
+        "Dashboard 'Test assistant' page: streamed answers with sources, confidence and first-token time"
       ],
       "acceptance": [
         "A question covered by the docs gets a streamed answer with at least one correct citation",

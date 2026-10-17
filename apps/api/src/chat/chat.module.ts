@@ -1,0 +1,19 @@
+import { Module } from '@nestjs/common';
+import { createEmbeddingProvider, createLlmProvider } from '@supportpilot/ai';
+import { WidgetModule } from '../widget/widget.module';
+import { ChatController } from './chat.controller';
+import { ChatService, EMBEDDING_PROVIDER, LLM_PROVIDER } from './chat.service';
+import { PlaygroundController } from './playground.controller';
+
+/** RAG chat. Providers come from env: LLM_PROVIDER (mock | openai), EMBEDDING_PROVIDER (local | openai). */
+@Module({
+  imports: [WidgetModule],
+  controllers: [ChatController, PlaygroundController],
+  providers: [
+    ChatService,
+    { provide: LLM_PROVIDER, useFactory: () => createLlmProvider(process.env) },
+    { provide: EMBEDDING_PROVIDER, useFactory: () => createEmbeddingProvider(process.env) },
+  ],
+  exports: [ChatService],
+})
+export class ChatModule {}

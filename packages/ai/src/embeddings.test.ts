@@ -87,8 +87,8 @@ describe('OpenAiEmbeddings', () => {
 
 describe('createEmbeddingProvider', () => {
   it('defaults to the offline provider', () => {
-    expect(createEmbeddingProvider({}).model).toBe('local-hash-v1');
-    expect(createEmbeddingProvider({ EMBEDDING_PROVIDER: 'mock' }).model).toBe('local-hash-v1');
+    expect(createEmbeddingProvider({}).model).toBe('local-hash-v2');
+    expect(createEmbeddingProvider({ EMBEDDING_PROVIDER: 'mock' }).model).toBe('local-hash-v2');
     expect(() => createEmbeddingProvider({ EMBEDDING_PROVIDER: 'nope' })).toThrow(/Unknown/);
   });
 

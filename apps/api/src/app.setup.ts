@@ -4,9 +4,9 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import type { NextFunction, Request, Response } from 'express';
 
-/** Widget routes are called by widget.js from client websites. */
+/** Widget routes (/widget/*, public API /v1/*) are called by widget.js from client websites. */
 export function isWidgetRoute(path: string): boolean {
-  return path === '/widget' || path.startsWith('/widget/');
+  return path === '/widget' || path.startsWith('/widget/') || path.startsWith('/v1/');
 }
 
 /** Middleware and settings shared by main.ts and the integration tests. */

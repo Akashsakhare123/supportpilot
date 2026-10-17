@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[#######-------------] 35%`  **6 / 17 tasks done** (30 / 108 est. hours)  
+`[########------------] 41%`  **7 / 17 tasks done** (40 / 108 est. hours)  
 Last update: 2026-10-17  
-**Current / next task:** T07 RAG chat API (Not started)
+**Current / next task:** T08 Embeddable widget (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -24,7 +24,7 @@ Last update: 2026-10-17
 | [T04](#t04---knowledge-base-upload) | Week 2 | Knowledge base upload | Done | 2026-10-17 |
 | [T05](#t05---chunking-and-embeddings) | Week 2 | Chunking and embeddings | Done | 2026-10-17 |
 | [T06](#t06---background-ingestion-job) | Week 2 | Background ingestion job | Done | 2026-10-17 |
-| [T07](#t07---rag-chat-api) | Week 3 | RAG chat API | Not started |  |
+| [T07](#t07---rag-chat-api) | Week 3 | RAG chat API | Done | 2026-10-17 |
 | [T08](#t08---embeddable-widget) | Week 3 | Embeddable widget | Not started |  |
 | [T09](#t09---agent-inbox) | Week 4 | Agent inbox | Not started |  |
 | [T10](#t10---handoff-logic) | Week 4 | Handoff logic | Not started |  |
@@ -44,7 +44,7 @@ Last update: 2026-10-17
 |---|---|---|---|---|---|
 | Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 3/3 |
-| Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 0/2 |
+| Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 1/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 0/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
 | Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 0/4 |
@@ -259,26 +259,27 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T07 - RAG chat API
 
-`Not started` · est. 10 h · depends on: T06
+`Done` · est. 10 h · depends on: T06 · completed 2026-10-17
 
 **Goal:** Answer customer questions using only the tenant's docs, streamed token by token, with sources and a confidence score.
 
 **Subtasks**
 
-- [ ] conversations + messages tables (status ai/waiting/human/closed; sources jsonb; confidence)
-- [ ] Pipeline: PII redaction -> embed question -> top-k chunks for the tenant -> prompt -> streamed LLM answer
-- [ ] Prompt rules: answer only from context, otherwise say so; context wrapped as untrusted data; last N messages as memory
-- [ ] Structured metadata per answer: confidence (0-1), cited chunk ids, needs_human flag
-- [ ] Confidence = blend of retrieval similarity and model self-rating (formula documented in ARCHITECTURE.md)
-- [ ] LlmProvider interface; provider and model chosen via env
-- [ ] POST /v1/chat with Server-Sent Events, sharing the same ChatService the socket gateway uses
-- [ ] Persist every message with sources + confidence; write usage_events
+- [x] conversations + messages + usage_events tables (status ai/waiting/human/closed; sources jsonb; confidence; metadata)
+- [x] Pipeline: PII masking -> embed question -> tenant top-k above the similarity floor -> grounded prompt -> streamed answer
+- [x] Prompt rules: answer only from context, otherwise say so; passages and question wrapped as untrusted data; last 6 messages as memory
+- [x] Structured metadata per answer (@@META line hidden by a streaming splitter): answered, self-confidence, cited passages
+- [x] Confidence = 0.6 x calibrated retrieval + 0.4 x self-rating; needs_human below the tenant threshold or on 'talk to a person'
+- [x] LlmProvider interface: offline mock (default) and OpenAI-compatible (OpenAI, Ollama...) chosen via env
+- [x] POST /v1/chat with Server-Sent Events + POST /chat/playground, both through one ChatService
+- [x] Persist every message with sources + confidence; write a chat.answer usage event
+- [x] Dashboard 'Test assistant' page: streamed answers with sources, confidence and first-token time
 
 **Acceptance criteria**
 
-- [ ] A question covered by the docs gets a streamed answer with at least one correct citation
-- [ ] A question not covered gets an honest 'I don't know' with low confidence
-- [ ] First token arrives in under 2 seconds locally
+- [x] A question covered by the docs gets a streamed answer with at least one correct citation
+- [x] A question not covered gets an honest 'I don't know' with low confidence
+- [x] First token arrives in under 2 seconds locally
 
 **Deliverables:** ChatService, Streaming endpoint, Confidence scorer  
 **Interview talking point:** The model can only answer from retrieved chunks and must cite them, which keeps answers grounded and auditable.

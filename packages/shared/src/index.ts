@@ -4,3 +4,5 @@ export * from './documents';
 export * from './health';
 export * from './jobs';
 export * from './tenant';
+export * from './chat';
+export * from './pii';

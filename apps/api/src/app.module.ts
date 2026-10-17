@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
+import { ChatModule } from './chat/chat.module';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { DocumentsModule } from './documents/documents.module';
@@ -24,6 +25,7 @@ import { WidgetModule } from './widget/widget.module';
     TenantModule,
     WidgetModule,
     DocumentsModule,
+    ChatModule,
     HealthModule,
   ],
   controllers: [AppController],
