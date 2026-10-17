@@ -96,6 +96,8 @@ pnpm db:seed                    # demo tenant Acme Bikes
 pnpm dev                        # api :4000, dashboard :3000, widget demo :5173, worker
 ```
 
+`pnpm dev` builds `packages/shared` and `packages/db` once, then watches the apps. If you edit those packages while it runs, also run `pnpm dev:packages` in a second terminal.
+
 | URL | What |
 |---|---|
 | http://localhost:3000 | Dashboard (shows live system status) |

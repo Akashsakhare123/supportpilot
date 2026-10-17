@@ -97,6 +97,7 @@ cp .env.example .env            # first time only
 docker compose up -d            # Postgres (pgvector) + Redis
 pnpm i                          # install
 pnpm dev                        # api, worker, dashboard, widget in watch mode
+pnpm dev:packages               # 2nd terminal, only when editing packages/shared or packages/db
 pnpm db:migrate && pnpm db:seed # schema (+ demo tenant "Acme Bikes" from T03)
 pnpm lint && pnpm typecheck && pnpm test
 pnpm test:integration           # needs docker compose running

@@ -33,7 +33,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch",
+    "watch": "tsup --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

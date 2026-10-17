@@ -4,7 +4,8 @@
   1. Checks required tools: Node 22+, pnpm, Git, Docker (engine running), Python + libs.
   2. Installs what is missing where it safely can (pnpm, Python libs), starts Docker Desktop.
   3. Syncs new settings into .env, pnpm install, starts Postgres + Redis, generates + runs
-     migrations, seeds demo data, lint, typecheck, tests, build, integration tests.
+     migrations, seeds demo data, lint, typecheck, tests, build, integration tests, and a
+     pnpm dev smoke test (API /health + dashboard /login answer, then everything is stopped).
   Everything is logged to .claude-logs\doctor.log so Claude can read the result.
 
 .EXAMPLE
@@ -18,6 +19,7 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
+$ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest is very slow with the progress bar on
 $env:NO_COLOR = '1'
 $env:FORCE_COLOR = '0'
 
@@ -114,6 +116,54 @@ function Test-Tool([string]$Name, [string]$Exe, [string[]]$Arguments, [string]$H
     Write-Log ("  MISS {0,-16} {1}" -f $Name, $Hint)
   }
   return $version
+}
+
+# HTTP status of a URL, or 0 when nothing answers.
+function Get-HttpStatus([string]$Url, [int]$TimeoutSec = 5) {
+  try {
+    return [int](Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec $TimeoutSec).StatusCode
+  } catch {
+    if ($_.Exception.Response) { return [int]$_.Exception.Response.StatusCode }
+    return 0
+  }
+}
+
+# Start `pnpm dev`, wait until the API and dashboard answer, then stop everything again.
+function Test-DevServers {
+  Write-Host ''
+  Write-Host '=== Dev servers smoke test (pnpm dev) ===' -ForegroundColor Cyan
+  Write-Log ''
+  Write-Log '=== Dev servers smoke test (pnpm dev) ==='
+  if ((Get-HttpStatus 'http://localhost:4000/health' 2) -ne 0 -or (Get-HttpStatus 'http://localhost:3000' 2) -ne 0) {
+    Write-Log '  skipped: something is already running on port 3000 or 4000 (stop pnpm dev and run again)'
+    Add-Result 'Dev servers (pnpm dev)' $true 'skipped: ports 3000/4000 already in use'
+    return
+  }
+  $devLog = Join-Path $LogDir 'dev.log'
+  $timer = [Diagnostics.Stopwatch]::StartNew()
+  $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "pnpm dev > `"$devLog`" 2>&1" `
+    -WorkingDirectory $Root -WindowStyle Hidden -PassThru
+  $api = 0; $web = 0
+  for ($i = 0; $i -lt 60 -and ($api -ne 200 -or $web -ne 200); $i++) {
+    Start-Sleep -Seconds 3
+    if ($proc.HasExited) { break }
+    if ($api -ne 200) { $api = Get-HttpStatus 'http://localhost:4000/health' 5 }
+    # First request makes Next.js compile the page, so allow a long timeout.
+    if ($api -eq 200 -and $web -ne 200) { $web = Get-HttpStatus 'http://localhost:3000/login' 60 }
+  }
+  $timer.Stop()
+  & taskkill.exe /PID $proc.Id /T /F 2>&1 | Out-Null
+  Start-Sleep -Seconds 2
+  Write-Log "  API /health -> $api, dashboard /login -> $web ($([math]::Round($timer.Elapsed.TotalSeconds))s)"
+  if ($api -ne 200 -or $web -ne 200) {
+    Write-Log '  --- last 80 lines of .claude-logs\dev.log ---'
+    if (Test-Path $devLog) { Get-Content $devLog -Tail 80 | ForEach-Object { Write-Log "  $_" } }
+    Write-Host "  pnpm dev did not come up; see .claude-logs\dev.log" -ForegroundColor Red
+  } else {
+    Write-Host '  API and dashboard answered; dev servers stopped again.' -ForegroundColor Green
+  }
+  Add-Result 'Dev servers: API /health' ($api -eq 200) "HTTP $api" $timer.Elapsed.TotalSeconds
+  Add-Result 'Dev servers: dashboard /login' ($web -eq 200) "HTTP $web"
 }
 
 # ------------------------------------------------------------------ 1. tools
@@ -238,6 +288,7 @@ if ($pnpm -and $installed -and -not $SkipChecks) {
   Invoke-Step 'Build (pnpm build)' { pnpm build } | Out-Null
   if ($dbReady) {
     Invoke-Step 'Integration tests (pnpm test:integration)' { pnpm test:integration } | Out-Null
+    Test-DevServers
   } else {
     Add-Result 'Integration tests' $false 'skipped: database not ready'
   }
