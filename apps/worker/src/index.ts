@@ -1,11 +1,11 @@
 import { QUEUES } from '@supportpilot/shared';
-import { loadDotEnv, parseServerEnv } from '@supportpilot/shared/node';
+import { baseEnvSchema, loadDotEnv, parseEnv } from '@supportpilot/shared/node';
 import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import { processIngestion } from './processors/ingestion';
 
 loadDotEnv(__dirname);
-const env = parseServerEnv(process.env);
+const env = parseEnv(baseEnvSchema, process.env);
 
 // BullMQ requires maxRetriesPerRequest: null on the worker's connection.
 const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });

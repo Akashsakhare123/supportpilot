@@ -106,7 +106,7 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgres://supportpilot:supportpilot@localhost:5432/supportpilot_test
       REDIS_URL: redis://localhost:6379
-      JWT_SECRET: ci-only-secret
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
       LLM_PROVIDER: mock # integration tests never call a paid API
       EMBEDDING_PROVIDER: mock
     steps:
@@ -182,7 +182,7 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgres://supportpilot:supportpilot@localhost:5432/supportpilot_e2e
       REDIS_URL: redis://localhost:6379
-      JWT_SECRET: ci-only-secret
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
       LLM_PROVIDER: mock
       EMBEDDING_PROVIDER: mock
     steps:

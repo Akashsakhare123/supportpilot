@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { API_URL, getHealth } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -31,8 +32,15 @@ export default async function Home() {
           AI customer support with real-time human handoff
         </h1>
         <p className="mt-3 text-slate-600">
-          Dashboard scaffold. Sign-up and login arrive in T02-T03; the agent inbox in T09.
+          Upload your docs, embed one script tag, and let AI answer your customers. Low-confidence
+          chats are handed to your team in real time.
         </p>
+        <Link
+          href="/login"
+          className="mt-6 inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand/90"
+        >
+          Log in
+        </Link>
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

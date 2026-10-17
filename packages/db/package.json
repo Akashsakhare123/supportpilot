@@ -33,6 +33,7 @@
     "studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@supportpilot/shared": "workspace:*",
     "drizzle-orm": "^0.44.2",
     "pg": "^8.16.0"

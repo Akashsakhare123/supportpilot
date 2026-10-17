@@ -216,11 +216,45 @@ erDiagram
 
 | Layer | How | Catches |
 |---|---|---|
-| 1. Request context | Tenant id comes only from the verified JWT (dashboard) or the public key (widget), stored in a request-scoped `TenantContext`. Never read from the body or query string. | Spoofed tenant ids |
+| 1. Request context | Tenant id comes only from the verified JWT (dashboard) or the public key (widget). The global `JwtAuthGuard` attaches `{ userId, tenantId, role }` to the request and handlers receive it with `@Auth()`. Never read from the body or query string. | Spoofed tenant ids |
 | 2. Scoped data access | Repository functions take `tenantId` as a required argument; there is no unscoped query helper. | Forgotten `WHERE` clauses |
 | 3. Postgres RLS *(T15)* | Row-Level Security policies on every tenant table, using `SET LOCAL app.tenant_id` per transaction. | Bugs that slip past layers 1-2 |
 
 The tenant isolation test suite (T14) creates two tenants and asserts that no endpoint, socket event or search ever returns the other tenant's data.
+
+## 6b. Authentication and roles (T02)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant B as Browser (dashboard)
+  participant N as Next.js (/api proxy)
+  participant A as NestJS API
+  participant D as Postgres
+
+  B->>N: POST /api/auth/login {email, password}
+  N->>A: POST /auth/login
+  A->>D: user by email, argon2id verify
+  A->>D: insert refresh_tokens (sha256 hash, family)
+  A-->>B: { accessToken (15 min), user } + Set-Cookie sp_refresh (httpOnly, 14 days)
+  Note over B: access token kept in memory only
+  B->>N: GET /api/users  Authorization: Bearer ...
+  N->>A: JwtAuthGuard -> RolesGuard(@Roles('admin'))
+  A-->>B: 200 team, or 403 for agents
+  B->>N: POST /api/auth/refresh (cookie, on load or after a 401)
+  N->>A: rotate: revoke old token, issue successor in same family
+  A-->>B: new accessToken + new cookie
+```
+
+| Piece | How |
+|---|---|
+| Passwords | argon2id via `@node-rs/argon2` (prebuilt, no native build step). Unknown emails are verified against a dummy hash so timing does not reveal which emails exist. |
+| Access token | JWT (HS256, issuer `supportpilot`), 15 minutes, claims `sub`, `tid` (tenant), `role`. Kept in React memory, never in localStorage. |
+| Refresh token | 256-bit random value in an httpOnly `sp_refresh` cookie. Only its SHA-256 hash is stored. Every refresh revokes it and issues a successor in the same *family* (atomic `UPDATE ... RETURNING`, so two requests cannot both claim it). |
+| Reuse detection | Presenting a revoked token more than 10 s after it was rotated means it was copied: the whole family is revoked and the user must log in again. Within 10 s it is treated as two tabs refreshing at once. |
+| Roles | `owner > admin > agent`. `@Roles('admin')` means "admin or higher", enforced by the global `RolesGuard` after `JwtAuthGuard`. Routes are private by default; `@Public()` opts out (health, login, refresh, invites). |
+| Invites | Owners invite admins and agents, admins invite agents. Single-use token (hash stored), 7-day expiry. No email provider yet: outside production the link is logged and returned to the dashboard. |
+| Cookies across origins | The dashboard proxies `/api/*` to the API (Next.js rewrites), so the refresh cookie is first-party and `SameSite=Lax` works in dev and production. Next.js middleware redirects signed-out visitors of `/app/*` to `/login`. |
 
 ## 7. Real-time events *(planned, contract lives in `packages/shared`)*
 
@@ -293,5 +327,9 @@ never pull in `node:fs`.
 | D10 | Internal packages built with tsup (CJS + ESM) | Source-only TS packages | NestJS runs compiled CommonJS on Node and cannot import raw `.ts` from a package; one build works for every consumer. |
 | D11 | Jest + SWC for the API, Vitest elsewhere | One runner everywhere | Jest is NestJS's documented path; SWC keeps decorator metadata for DI and is fast. Vitest is lighter for plain TS packages. |
 | D12 | One validated env schema (zod) + repo-root `.env` | Per-app dotenv, @nestjs/config | Apps fail at startup with one readable list of missing variables; same rules for API and worker. |
+| D13 | Short-lived JWT in memory + rotating refresh cookie with reuse detection | Long-lived JWT in localStorage, server sessions | XSS cannot read the refresh token; a stolen refresh token is detected on reuse; the API stays stateless per request. |
+| D14 | Dashboard proxies `/api/*` to the API | CORS + `SameSite=None` cookies | First-party cookie on every browser (incl. Safari ITP); no CORS preflights for the dashboard. |
+| D15 | `@node-rs/argon2` for password hashing | `argon2` (node-gyp), bcrypt | argon2id is the OWASP recommendation; prebuilt binaries install cleanly on Windows, Linux and Alpine Docker. |
+| D16 | zod schemas in `@supportpilot/shared` + a small `ZodValidationPipe` | class-validator DTOs | One schema validates the API body and types the dashboard form; no duplicate DTO classes. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

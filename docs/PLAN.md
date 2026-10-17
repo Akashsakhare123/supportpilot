@@ -12,14 +12,14 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[#-------------------] 6%`  **1 / 17 tasks done** (4 / 108 est. hours)  
+`[##------------------] 12%`  **2 / 17 tasks done** (10 / 108 est. hours)  
 Last update: 2026-10-17  
-**Current / next task:** T02 Auth with roles (Not started)
+**Current / next task:** T03 Tenant onboarding (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
 | [T01](#t01---repo-setup-monorepo) | Week 1 | Repo setup (monorepo) | Done | 2026-10-17 |
-| [T02](#t02---auth-with-roles) | Week 1 | Auth with roles | Not started |  |
+| [T02](#t02---auth-with-roles) | Week 1 | Auth with roles | Done | 2026-10-17 |
 | [T03](#t03---tenant-onboarding) | Week 1 | Tenant onboarding | Not started |  |
 | [T04](#t04---knowledge-base-upload) | Week 2 | Knowledge base upload | Not started |  |
 | [T05](#t05---chunking-and-embeddings) | Week 2 | Chunking and embeddings | Not started |  |
@@ -42,7 +42,7 @@ Last update: 2026-10-17
 <!-- AUTO:MILESTONES -->
 | Week | Dates | Milestone | Release | Outcome | Progress |
 |---|---|---|---|---|---|
-| Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 1/3 |
+| Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 2/3 |
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 0/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 0/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 0/3 |
@@ -125,27 +125,29 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T02 - Auth with roles
 
-`Not started` · est. 6 h · depends on: T01
+`Done` · est. 6 h · depends on: T01 · completed 2026-10-17
 
 **Goal:** Secure dashboard login with role-based access; every request carries a verified tenant context.
 
 **Subtasks**
 
-- [ ] tenants + users tables and migrations; argon2 password hashing
-- [ ] POST /auth/login, /auth/refresh, /auth/logout: 15-min access JWT + rotating refresh token in httpOnly cookie
-- [ ] JWT claims: sub, tenantId, role; TenantContext populated by a global guard
-- [ ] @Roles() decorator + RolesGuard (owner > admin > agent)
-- [ ] Invite flow: owner/admin invites agents by email (invite token; email printed to console in dev)
-- [ ] Dashboard: login page, auth middleware, role-aware navigation
-- [ ] Unit tests for guards; integration tests for login / refresh / logout
+- [x] tenants, users, refresh_tokens and invites tables (Drizzle); argon2id password hashing (@node-rs/argon2)
+- [x] POST /auth/login, /auth/refresh, /auth/logout, GET /auth/me: 15-min access JWT + rotating refresh token in an httpOnly cookie
+- [x] Refresh token families with reuse detection (replayed token revokes the whole session)
+- [x] JWT claims: sub, tid (tenant), role; global JwtAuthGuard attaches the caller, routes private by default (@Public opts out)
+- [x] @Roles(minRole) decorator + global RolesGuard (owner > admin > agent)
+- [x] Invite flow: owners invite admins/agents, admins invite agents; single-use 7-day link (printed + returned in dev)
+- [x] Dashboard: login page, /api proxy (first-party cookie), middleware redirect, silent refresh, role-aware navigation, team + invite pages
+- [x] Demo seed: tenant Acme Bikes with an owner, admin and agent
+- [x] Unit tests for guards, tokens and validation; integration tests for login, roles, refresh rotation, logout and invites
 
 **Acceptance criteria**
 
-- [ ] An agent calling an admin-only endpoint gets 403 (covered by a test)
-- [ ] Refresh token rotation works and logout invalidates the refresh token
-- [ ] Password hashes are never logged or returned by any endpoint
+- [x] An agent calling an admin-only endpoint gets 403 (covered by a test)
+- [x] Refresh token rotation works and logout invalidates the refresh token
+- [x] Password hashes are never logged or returned by any endpoint
 
-**Deliverables:** Auth module, Roles guard, Login + invite UI  
+**Deliverables:** Auth + users modules, JWT + roles guards, Login, team and invite pages, Demo seed  
 **Interview talking point:** The tenant id comes from the verified token, never from the request body, so users cannot spoof another tenant.
 
 #### T03 - Tenant onboarding

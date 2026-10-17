@@ -1,12 +1,12 @@
-import { loadDotEnv, parseServerEnv, type ServerEnv } from '@supportpilot/shared/node';
+import { loadDotEnv, parseServerEnv, type ApiEnv } from '@supportpilot/shared/node';
 
 /** Injection token for the validated environment. */
 export const ENV = Symbol('ENV');
 
-let cached: ServerEnv | undefined;
+let cached: ApiEnv | undefined;
 
 /** Load the repo-root .env (if any) and validate env vars once. Throws with every problem listed. */
-export function loadEnv(): ServerEnv {
+export function loadEnv(): ApiEnv {
   if (!cached) {
     loadDotEnv(__dirname);
     cached = parseServerEnv(process.env);

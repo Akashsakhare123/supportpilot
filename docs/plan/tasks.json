@@ -86,22 +86,24 @@
       "week": "Week 1",
       "title": "Auth with roles",
       "notes": "Owner / admin / agent",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-17",
+      "completed": "2026-10-17",
       "est_hours": 6,
       "depends": [
         "T01"
       ],
       "goal": "Secure dashboard login with role-based access; every request carries a verified tenant context.",
       "subtasks": [
-        "tenants + users tables and migrations; argon2 password hashing",
-        "POST /auth/login, /auth/refresh, /auth/logout: 15-min access JWT + rotating refresh token in httpOnly cookie",
-        "JWT claims: sub, tenantId, role; TenantContext populated by a global guard",
-        "@Roles() decorator + RolesGuard (owner > admin > agent)",
-        "Invite flow: owner/admin invites agents by email (invite token; email printed to console in dev)",
-        "Dashboard: login page, auth middleware, role-aware navigation",
-        "Unit tests for guards; integration tests for login / refresh / logout"
+        "tenants, users, refresh_tokens and invites tables (Drizzle); argon2id password hashing (@node-rs/argon2)",
+        "POST /auth/login, /auth/refresh, /auth/logout, GET /auth/me: 15-min access JWT + rotating refresh token in an httpOnly cookie",
+        "Refresh token families with reuse detection (replayed token revokes the whole session)",
+        "JWT claims: sub, tid (tenant), role; global JwtAuthGuard attaches the caller, routes private by default (@Public opts out)",
+        "@Roles(minRole) decorator + global RolesGuard (owner > admin > agent)",
+        "Invite flow: owners invite admins/agents, admins invite agents; single-use 7-day link (printed + returned in dev)",
+        "Dashboard: login page, /api proxy (first-party cookie), middleware redirect, silent refresh, role-aware navigation, team + invite pages",
+        "Demo seed: tenant Acme Bikes with an owner, admin and agent",
+        "Unit tests for guards, tokens and validation; integration tests for login, roles, refresh rotation, logout and invites"
       ],
       "acceptance": [
         "An agent calling an admin-only endpoint gets 403 (covered by a test)",
@@ -109,9 +111,10 @@
         "Password hashes are never logged or returned by any endpoint"
       ],
       "deliverables": [
-        "Auth module",
-        "Roles guard",
-        "Login + invite UI"
+        "Auth + users modules",
+        "JWT + roles guards",
+        "Login, team and invite pages",
+        "Demo seed"
       ],
       "talking_point": "The tenant id comes from the verified token, never from the request body, so users cannot spoof another tenant."
     },

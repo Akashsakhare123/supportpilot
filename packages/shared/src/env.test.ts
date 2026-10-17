@@ -2,24 +2,27 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadDotEnv, parseServerEnv } from './env';
+import { baseEnvSchema, loadDotEnv, parseEnv, parseServerEnv } from './env';
 
-const valid = {
+const base = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
   REDIS_URL: 'redis://localhost:6379',
 };
+const api = { ...base, JWT_SECRET: 'x'.repeat(32) };
 
-describe('parseServerEnv', () => {
+describe('parseServerEnv (API)', () => {
   it('applies defaults', () => {
-    const env = parseServerEnv(valid);
+    const env = parseServerEnv(api);
     expect(env.API_PORT).toBe(4000);
     expect(env.NODE_ENV).toBe('development');
+    expect(env.JWT_ACCESS_TTL_SECONDS).toBe(900);
+    expect(env.REFRESH_TOKEN_TTL_DAYS).toBe(14);
     expect(env.CORS_ORIGINS).toEqual(['http://localhost:3000', 'http://localhost:5173']);
   });
 
   it('coerces and splits values', () => {
     const env = parseServerEnv({
-      ...valid,
+      ...api,
       API_PORT: '8080',
       CORS_ORIGINS: 'https://a.com, https://b.com',
     });
@@ -27,8 +30,18 @@ describe('parseServerEnv', () => {
     expect(env.CORS_ORIGINS).toEqual(['https://a.com', 'https://b.com']);
   });
 
+  it('rejects a short JWT secret', () => {
+    expect(() => parseServerEnv({ ...base, JWT_SECRET: 'short' })).toThrowError(/JWT_SECRET/);
+  });
+
   it('lists every missing variable in one error', () => {
-    expect(() => parseServerEnv({})).toThrowError(/DATABASE_URL[\s\S]*REDIS_URL/);
+    expect(() => parseServerEnv({})).toThrowError(/DATABASE_URL[\s\S]*REDIS_URL[\s\S]*JWT_SECRET/);
+  });
+});
+
+describe('parseEnv (worker base schema)', () => {
+  it('does not require API-only variables', () => {
+    expect(parseEnv(baseEnvSchema, base).REDIS_URL).toBe('redis://localhost:6379');
   });
 });
 

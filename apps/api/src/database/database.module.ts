@@ -1,6 +1,6 @@
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { createDb, createPool, type Pool } from '@supportpilot/db';
-import type { ServerEnv } from '@supportpilot/shared/node';
+import type { ApiEnv } from '@supportpilot/shared/node';
 import { ENV } from '../config/env';
 
 export const PG_POOL = Symbol('PG_POOL');
@@ -12,7 +12,7 @@ export const DRIZZLE = Symbol('DRIZZLE');
     {
       provide: PG_POOL,
       inject: [ENV],
-      useFactory: (env: ServerEnv) => createPool(env.DATABASE_URL),
+      useFactory: (env: ApiEnv) => createPool(env.DATABASE_URL),
     },
     {
       provide: DRIZZLE,

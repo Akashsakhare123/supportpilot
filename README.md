@@ -9,13 +9,13 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 ## Progress
 
 <!-- AUTO:PROGRESS -->
-![progress](https://img.shields.io/badge/progress-1%2F17%20tasks-3B3F8C)
+![progress](https://img.shields.io/badge/progress-2%2F17%20tasks-3B3F8C)
 
-`[#-------------------] 6%` - currently on **T02 Auth with roles**
+`[##------------------] 12%` - currently on **T03 Tenant onboarding**
 
 | Milestone | Release | Progress |
 |---|---|---|
-| M1 Foundation | v0.1.0 | 1/3 (in progress) |
+| M1 Foundation | v0.1.0 | 2/3 (in progress) |
 | M2 Knowledge base | v0.2.0 | 0/3 (planned) |
 | M3 AI chat MVP | v0.3.0 | 0/2 (planned) |
 | M4 Human handoff | v0.4.0 | 0/3 (planned) |
@@ -91,7 +91,8 @@ dependencies, starts Postgres + Redis, runs migrations and all checks, and write
 cp .env.example .env            # root env for api, worker, db scripts
 docker compose up -d            # PostgreSQL 16 + pgvector (host port 5434), Redis 7 (6379)
 pnpm install
-pnpm db:migrate                 # enables pgvector
+pnpm db:migrate                 # creates tables, enables pgvector
+pnpm db:seed                    # demo tenant Acme Bikes
 pnpm dev                        # api :4000, dashboard :3000, widget demo :5173, worker
 ```
 
@@ -100,6 +101,8 @@ pnpm dev                        # api :4000, dashboard :3000, widget demo :5173,
 | http://localhost:3000 | Dashboard (shows live system status) |
 | http://localhost:4000/health | API health: Postgres, pgvector, Redis |
 | http://localhost:5173 | Widget demo host page |
+
+Demo logins (after `pnpm db:seed`): `owner@acme.test`, `admin@acme.test`, `agent@acme.test`, password `Password123!`.
 
 Checks: `pnpm lint && pnpm typecheck && pnpm test` · integration tests (needs Docker running): `pnpm test:integration`
 

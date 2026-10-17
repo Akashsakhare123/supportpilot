@@ -8,6 +8,13 @@
       "when": 1792170000000,
       "tag": "0000_enable_pgvector",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792178199328,
+      "tag": "0001_nosy_invaders",
+      "breakpoints": true
     }
   ]
 }

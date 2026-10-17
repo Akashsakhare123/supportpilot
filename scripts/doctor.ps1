@@ -3,8 +3,8 @@
   SupportPilot setup check ("doctor") for Windows.
   1. Checks required tools: Node 22+, pnpm, Git, Docker (engine running), Python + libs.
   2. Installs what is missing where it safely can (pnpm, Python libs), starts Docker Desktop.
-  3. pnpm install, starts Postgres + Redis, runs migrations, lint, typecheck, tests, build,
-     integration tests.
+  3. Syncs new settings into .env, pnpm install, starts Postgres + Redis, generates + runs
+     migrations, seeds demo data, lint, typecheck, tests, build, integration tests.
   Everything is logged to .claude-logs\doctor.log so Claude can read the result.
 
 .EXAMPLE
@@ -187,10 +187,29 @@ if ($docker) {
 }
 
 # ---------------------------------------------------------- 2. project setup
-if (-not (Test-Path (Join-Path $Root '.env'))) {
-  Copy-Item (Join-Path $Root '.env.example') (Join-Path $Root '.env')
+$envFile = Join-Path $Root '.env'
+$envExample = Join-Path $Root '.env.example'
+if (-not (Test-Path $envFile)) {
+  Copy-Item $envExample $envFile
   Write-Log '  Created .env from .env.example'
   Add-Result 'Create .env' $true 'copied from .env.example'
+} else {
+  # New settings added to .env.example by later tasks are appended; existing values are kept.
+  $known = @{}
+  foreach ($line in Get-Content $envFile) {
+    if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=') { $known[$Matches[1]] = $true }
+  }
+  $added = @()
+  foreach ($line in Get-Content $envExample) {
+    if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=' -and -not $known.ContainsKey($Matches[1])) {
+      Add-Content -Path $envFile -Value $line
+      $added += $Matches[1]
+    }
+  }
+  if ($added.Count -gt 0) {
+    Write-Log "  Added new settings to .env: $($added -join ', ')"
+    Add-Result 'Update .env (new settings)' $true ($added -join ', ')
+  }
 }
 
 $installed = $true
@@ -201,7 +220,13 @@ if ($pnpm -and -not $SkipInstall) {
 $dbReady = $false
 if ($engineOk) {
   if (Invoke-Step 'Start Postgres + Redis (docker compose up)' { docker compose up -d --wait }) {
-    $dbReady = Invoke-Step 'Database migrations (pnpm db:migrate)' { pnpm db:migrate }
+    # Writes a new SQL migration only when the Drizzle schema changed (no-op otherwise).
+    if (Invoke-Step 'Generate migrations from schema (pnpm db:generate)' { pnpm db:generate }) {
+      $dbReady = Invoke-Step 'Database migrations (pnpm db:migrate)' { pnpm db:migrate }
+      if ($dbReady) {
+        Invoke-Step 'Seed demo data (pnpm db:seed)' { pnpm db:seed } | Out-Null
+      }
+    }
   }
 }
 

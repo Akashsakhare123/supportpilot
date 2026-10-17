@@ -5,6 +5,7 @@ module.exports = {
   testRegex: '.*\\.int-spec\\.ts$',
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: { '^.+\\.ts$': '@swc/jest' },
+  globalSetup: '<rootDir>/global-setup.ts',
   setupFiles: ['<rootDir>/setup-env.ts'],
   testTimeout: 20000,
 };

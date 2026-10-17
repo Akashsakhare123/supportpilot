@@ -1,5 +1,5 @@
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
-import type { ServerEnv } from '@supportpilot/shared/node';
+import type { ApiEnv } from '@supportpilot/shared/node';
 import { Redis } from 'ioredis';
 import { ENV } from '../config/env';
 
@@ -12,7 +12,7 @@ export const REDIS = Symbol('REDIS');
       provide: REDIS,
       inject: [ENV],
       // Fail fast: one retry per command, so /health reports "error" quickly when Redis is down.
-      useFactory: (env: ServerEnv) =>
+      useFactory: (env: ApiEnv) =>
         new Redis(env.REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 3_000 }),
     },
   ],
