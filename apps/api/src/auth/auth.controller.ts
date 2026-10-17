@@ -19,6 +19,8 @@ import {
   type LoginResponse,
   loginSchema,
   REFRESH_COOKIE,
+  type SignupInput,
+  signupSchema,
 } from '@supportpilot/shared';
 import type { ApiEnv } from '@supportpilot/shared/node';
 import type { Request, Response } from 'express';
@@ -55,6 +57,17 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResponse> {
     return this.respond(res, await this.auth.login(body, clientMeta(req)));
+  }
+
+  /** Self-serve signup: new tenant + owner, signed in straight away. */
+  @Public()
+  @Post('signup')
+  async signup(
+    @Body(new ZodValidationPipe(signupSchema)) body: SignupInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResponse> {
+    return this.respond(res, await this.auth.signup(body, clientMeta(req)));
   }
 
   /** Uses the httpOnly refresh cookie; returns a new access token and rotates the cookie. */

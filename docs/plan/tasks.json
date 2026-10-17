@@ -123,22 +123,25 @@
       "week": "Week 1",
       "title": "Tenant onboarding",
       "notes": "Signup, public key generation",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-17",
+      "completed": "2026-10-17",
       "est_hours": 5,
       "depends": [
         "T02"
       ],
       "goal": "A business signs up and gets a tenant, an owner account and a widget public key in under a minute.",
       "subtasks": [
-        "POST /auth/signup creates tenant + owner in one DB transaction",
-        "Public key generation (pk_live_ + random) and key rotation endpoint",
-        "Branding settings (jsonb): primary color, logo, greeting, launcher position",
-        "Allowed domains list per tenant (used by the widget origin check)",
-        "Onboarding wizard: company name -> branding -> copy embed snippet",
-        "Public GET /widget/config?key=pk_... returns branding only, never secrets",
-        "Seed script: demo tenant 'Acme Bikes' with sample docs for the live demo"
+        "POST /auth/signup creates tenant + owner in one DB transaction and signs the owner in",
+        "Public key generation (pk_live_ + 144-bit random) and a rotation endpoint that invalidates the old key at once",
+        "Branding settings (jsonb): primary colour, logo, greeting, launcher position, with zod validation",
+        "Allowed domains per tenant, normalised (scheme/port/path stripped), enforced against the Origin header",
+        "Onboarding wizard: company name -> branding with live preview -> allowed domains + embed snippet",
+        "Settings page: company, branding, domains, widget key with copy + rotate",
+        "Public GET /widget/config?key=pk_... returns tenant name + branding only; CORS open for widget routes only",
+        "Widget fetches its config and applies the tenant's colour, logo, greeting and position",
+        "Seed: Acme Bikes branding, allowed domains and sample knowledge-base docs (ingested from T04)",
+        "GET / on the API returns a short info document instead of 404"
       ],
       "acceptance": [
         "Signup lands on a dashboard showing the embed snippet with that tenant's key",
@@ -147,8 +150,9 @@
       ],
       "deliverables": [
         "Signup + onboarding wizard",
-        "Branding settings",
-        "Seed script"
+        "Settings page",
+        "Widget config endpoint",
+        "Seed + sample docs"
       ],
       "talking_point": "The public key identifies the tenant; the allowed-domains check stops someone else embedding a client's widget.",
       "standout": "Widget theming per tenant"

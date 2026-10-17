@@ -139,7 +139,9 @@ function Test-DevServers {
     Add-Result 'Dev servers (pnpm dev)' $true 'skipped: ports 3000/4000 already in use'
     return
   }
-  $devLog = Join-Path $LogDir 'dev.log'
+  # Fresh log file per run: a leftover process from an earlier run may still hold the old one open.
+  Get-ChildItem -Path $LogDir -Filter 'dev*.log' -ErrorAction SilentlyContinue | Remove-Item -ErrorAction SilentlyContinue
+  $devLog = Join-Path $LogDir ('dev-{0}.log' -f (Get-Date -Format 'HHmmss'))
   $timer = [Diagnostics.Stopwatch]::StartNew()
   $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "pnpm dev > `"$devLog`" 2>&1" `
     -WorkingDirectory $Root -WindowStyle Hidden -PassThru
@@ -154,11 +156,12 @@ function Test-DevServers {
   $timer.Stop()
   & taskkill.exe /PID $proc.Id /T /F 2>&1 | Out-Null
   Start-Sleep -Seconds 2
+  if ($proc.HasExited -and ($api -ne 200 -or $web -ne 200)) { Write-Log "  pnpm dev exited early (exit code $($proc.ExitCode))" }
   Write-Log "  API /health -> $api, dashboard /login -> $web ($([math]::Round($timer.Elapsed.TotalSeconds))s)"
   if ($api -ne 200 -or $web -ne 200) {
-    Write-Log '  --- last 80 lines of .claude-logs\dev.log ---'
+    Write-Log "  --- last 80 lines of $devLog ---"
     if (Test-Path $devLog) { Get-Content $devLog -Tail 80 | ForEach-Object { Write-Log "  $_" } }
-    Write-Host "  pnpm dev did not come up; see .claude-logs\dev.log" -ForegroundColor Red
+    Write-Host "  pnpm dev did not come up; see $devLog" -ForegroundColor Red
   } else {
     Write-Host '  API and dashboard answered; dev servers stopped again.' -ForegroundColor Green
   }

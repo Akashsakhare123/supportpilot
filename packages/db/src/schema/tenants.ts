@@ -12,6 +12,8 @@ export const tenants = pgTable('tenants', {
   /** Domains allowed to embed the widget (checked against the Origin header). */
   allowedDomains: jsonb('allowed_domains').$type<string[]>().notNull().default([]),
   handoffThreshold: real('handoff_threshold').notNull().default(0.55),
+  /** Set when an owner/admin finishes the onboarding wizard. */
+  onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import type { AuthUser, LoginResponse } from '@supportpilot/shared';
+import type { AuthUser, LoginResponse, SignupInput } from '@supportpilot/shared';
 import {
   createContext,
   type ReactNode,
@@ -20,7 +20,10 @@ interface AuthContextValue {
   status: Status;
   user: AuthUser | null;
   login(email: string, password: string): Promise<void>;
+  signup(input: SignupInput): Promise<void>;
   logout(): Promise<void>;
+  /** Re-read the signed-in user (e.g. after onboarding changes the tenant). */
+  reloadUser(): Promise<void>;
   /** Store a session returned by login / accept-invite. */
   setSession(session: LoginResponse): void;
   /** fetch('/api' + path) with the access token; refreshes once and retries on 401. */
@@ -101,6 +104,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setSession],
   );
 
+  const signup = useCallback(
+    async (input: SignupInput) => {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      setSession((await res.json()) as LoginResponse);
+    },
+    [setSession],
+  );
+
   const logout = useCallback(async () => {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
     clear();
@@ -127,9 +143,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const reloadUser = useCallback(async () => {
+    const res = await apiFetch('/auth/me');
+    if (res.ok) setUser((await res.json()) as AuthUser);
+  }, [apiFetch]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, logout, setSession, apiFetch }),
-    [status, user, login, logout, setSession, apiFetch],
+    () => ({ status, user, login, signup, logout, reloadUser, setSession, apiFetch }),
+    [status, user, login, signup, logout, reloadUser, setSession, apiFetch],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

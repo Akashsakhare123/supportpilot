@@ -27,6 +27,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     if (status === 'anonymous') router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [status, pathname, router]);
 
+  // Owners/admins of a new workspace finish the onboarding wizard first.
+  const needsOnboarding =
+    user !== null && !user.tenant.onboarded && roleAtLeast(user.role, 'admin');
+  useEffect(() => {
+    if (needsOnboarding && pathname !== '/app/onboarding') router.replace('/app/onboarding');
+  }, [needsOnboarding, pathname, router]);
+
   if (status !== 'authenticated' || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">

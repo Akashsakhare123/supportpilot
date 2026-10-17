@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useEffect, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
@@ -64,6 +65,12 @@ function LoginForm() {
           {pending ? 'Logging in...' : 'Log in'}
         </Button>
       </form>
+      <p className="mt-6 text-center text-sm text-slate-500">
+        New to SupportPilot?{' '}
+        <Link href="/signup" className="font-medium text-brand hover:underline">
+          Create an account
+        </Link>
+      </p>
       {process.env.NODE_ENV !== 'production' && (
         <Alert tone="info" className="mt-6">
           Demo (after <code>pnpm db:seed</code>): owner@acme.test, admin@acme.test or

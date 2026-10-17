@@ -18,15 +18,17 @@ import {
   type User,
   users,
 } from '@supportpilot/db';
-import type {
-  AcceptInviteInput,
-  AuthUser,
-  InvitePreview,
-  LoginInput,
-  Role,
+import {
+  type AcceptInviteInput,
+  type AuthUser,
+  DEFAULT_BRANDING,
+  type InvitePreview,
+  type LoginInput,
+  type Role,
+  type SignupInput,
 } from '@supportpilot/shared';
 import type { ApiEnv } from '@supportpilot/shared/node';
-import { hashToken } from '../common/tokens';
+import { generatePublicKey, hashToken } from '../common/tokens';
 import { ENV } from '../config/env';
 import { DRIZZLE } from '../database/database.module';
 import type { AccessTokenPayload } from './auth.types';
@@ -60,6 +62,37 @@ export class AuthService {
 
     await this.db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
     return this.startSession(user, meta);
+  }
+
+  /** Self-serve signup: creates the tenant (with its widget key) and its owner in one transaction. */
+  async signup(input: SignupInput, meta: ClientMeta): Promise<SessionResult> {
+    const taken = await this.db.query.users.findFirst({ where: eq(users.email, input.email) });
+    if (taken) throw new ConflictException('An account with this email already exists');
+
+    const passwordHash = await this.passwords.hash(input.password);
+    const owner = await this.db.transaction(async (tx) => {
+      const [tenant] = await tx
+        .insert(tenants)
+        .values({
+          name: input.companyName,
+          publicKey: generatePublicKey(),
+          branding: DEFAULT_BRANDING,
+        })
+        .returning();
+      const [user] = await tx
+        .insert(users)
+        .values({
+          tenantId: tenant!.id,
+          email: input.email,
+          name: input.name,
+          role: 'owner',
+          passwordHash,
+          lastLoginAt: new Date(),
+        })
+        .returning();
+      return user!;
+    });
+    return this.startSession(owner, meta);
   }
 
   async refresh(token: string | undefined, meta: ClientMeta): Promise<SessionResult> {
@@ -168,7 +201,11 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role as Role,
-      tenant: { id: tenant.id, name: tenant.name },
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        onboarded: tenant.onboardingCompletedAt !== null,
+      },
     };
   }
 }

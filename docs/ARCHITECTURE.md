@@ -256,6 +256,13 @@ sequenceDiagram
 | Invites | Owners invite admins and agents, admins invite agents. Single-use token (hash stored), 7-day expiry. No email provider yet: outside production the link is logged and returned to the dashboard. |
 | Cookies across origins | The dashboard proxies `/api/*` to the API (Next.js rewrites), so the refresh cookie is first-party and `SameSite=Lax` works in dev and production. Next.js middleware redirects signed-out visitors of `/app/*` to `/login`. |
 
+## 6c. Tenant onboarding and widget config (T03)
+
+- **Signup** (`POST /auth/signup`) creates the tenant and its owner in one transaction, generates a `pk_live_` widget key and signs the owner in. New owners land in a three-step wizard (company, branding, install) until `tenants.onboarding_completed_at` is set.
+- **Public widget key**: identifies the tenant to `widget.js`. It is public by design (it sits in the client's HTML), so it grants nothing except reading public config and, later, chatting as an anonymous visitor of that tenant. Rotation replaces it instantly.
+- **`GET /widget/config?key=...`** returns only `{ tenantName, branding }`, cached for 60 s with `Vary: Origin`.
+- **CORS is split by route**: `/widget/*` reflects any origin without credentials; every other route only allows the dashboard origins (with credentials). The real gate for widget routes is the per-tenant **allowed domains** check on the `Origin` header (exact host or any subdomain). An empty list means "not configured yet" and allows every site, so a new workspace can test before going live.
+
 ## 7. Real-time events *(planned, contract lives in `packages/shared`)*
 
 | Namespace | Event | Direction | Payload |
@@ -331,5 +338,8 @@ never pull in `node:fs`.
 | D14 | Dashboard proxies `/api/*` to the API | CORS + `SameSite=None` cookies | First-party cookie on every browser (incl. Safari ITP); no CORS preflights for the dashboard. |
 | D15 | `@node-rs/argon2` for password hashing | `argon2` (node-gyp), bcrypt | argon2id is the OWASP recommendation; prebuilt binaries install cleanly on Windows, Linux and Alpine Docker. |
 | D16 | zod schemas in `@supportpilot/shared` + a small `ZodValidationPipe` | class-validator DTOs | One schema validates the API body and types the dashboard form; no duplicate DTO classes. |
+| D17 | CORS per route: open for `/widget/*`, dashboard-only elsewhere | One global CORS list | Client websites are unknown in advance; the allowed-domains check per tenant replaces a static CORS list for widget routes. |
+| D18 | Allowed domains enforced on `Origin`, empty list = open | Always require domains | Lets a new client try the widget immediately; the dashboard nudges them to add their domain before going live. |
+| D19 | `PATCH /tenant` uses a `.strict()` zod schema | Accept and ignore extra fields | Mass-assignment protection: plan, key and ids can never be changed through the settings endpoint. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

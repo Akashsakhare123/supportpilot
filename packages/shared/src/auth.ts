@@ -39,6 +39,14 @@ export const inviteSchema = z.object({
 });
 export type InviteInput = z.infer<typeof inviteSchema>;
 
+export const signupSchema = z.object({
+  companyName: z.string().trim().min(2, 'Company name is too short').max(80),
+  name: z.string().trim().min(1, 'Name is required').max(100),
+  email,
+  password,
+});
+export type SignupInput = z.infer<typeof signupSchema>;
+
 export const acceptInviteSchema = z.object({
   token: z.string().min(20).max(200),
   name: z.string().trim().min(1, 'Name is required').max(100),
@@ -52,7 +60,8 @@ export interface AuthUser {
   email: string;
   name: string;
   role: Role;
-  tenant: { id: string; name: string };
+  /** `onboarded` is false until an owner/admin finishes the onboarding wizard. */
+  tenant: { id: string; name: string; onboarded: boolean };
 }
 
 export interface LoginResponse {

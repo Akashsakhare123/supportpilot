@@ -4,7 +4,11 @@ import css from './styles.css?inline';
 
 const HOST_ID = 'supportpilot-widget';
 
-/** The embedding script tag: <script src=".../widget.js" data-supportpilot data-key="pk_..."></script> */
+/**
+ * The embedding script tag:
+ *   <script src=".../widget.js" data-supportpilot data-key="pk_..." async></script>
+ * Optional data-api="https://api.example.com" overrides the API URL baked in at build time.
+ */
 function findScriptTag(): HTMLScriptElement | null {
   return (
     (document.currentScript as HTMLScriptElement | null) ??
@@ -14,7 +18,8 @@ function findScriptTag(): HTMLScriptElement | null {
 
 function mount(): void {
   if (document.getElementById(HOST_ID)) return; // already mounted (script included twice)
-  const publicKey = findScriptTag()?.dataset.key;
+  const script = findScriptTag();
+  const publicKey = script?.dataset.key;
   if (!publicKey) {
     console.warn('[SupportPilot] Missing data-key on the widget script tag.');
     return;
@@ -32,7 +37,12 @@ function mount(): void {
   const root = document.createElement('div');
   shadow.appendChild(root);
 
-  render(<App publicKey={publicKey} />, root);
+  const apiUrl = (
+    script?.dataset.api ??
+    import.meta.env.VITE_API_URL ??
+    'http://localhost:4000'
+  ).replace(/\/+$/, '');
+  render(<App publicKey={publicKey} apiUrl={apiUrl} />, root);
 }
 
 if (document.readyState === 'loading') {

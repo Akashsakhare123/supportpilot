@@ -15,6 +15,13 @@
       "when": 1792178199328,
       "tag": "0001_nosy_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792239261592,
+      "tag": "0002_sweet_absorbing_man",
+      "breakpoints": true
     }
   ]
 }

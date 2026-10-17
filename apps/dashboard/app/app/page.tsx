@@ -1,8 +1,31 @@
 'use client';
 
 import { roleAtLeast } from '@supportpilot/shared';
+import Link from 'next/link';
+import { EmbedSnippet } from '@/components/tenant/embed-snippet';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
+import { useTenantSettings } from '@/lib/tenant';
+
+function InstallCard() {
+  const { settings } = useTenantSettings();
+  if (!settings) return null;
+  return (
+    <Card className="space-y-3 md:col-span-2">
+      <div>
+        <CardTitle>Install your widget</CardTitle>
+        <CardDescription>
+          Paste this on your website. Branding and allowed domains are in{' '}
+          <Link href="/app/settings" className="text-brand hover:underline">
+            Settings
+          </Link>
+          .
+        </CardDescription>
+      </div>
+      <EmbedSnippet publicKey={settings.publicKey} />
+    </Card>
+  );
+}
 
 const ROLE_SUMMARY = {
   owner: 'Full access: team, settings, knowledge base, billing and the inbox.',
@@ -30,11 +53,12 @@ export default function OverviewPage() {
           <Card>
             <CardTitle>Next up</CardTitle>
             <CardDescription>
-              Tenant onboarding with branding and your widget key arrives in T03, then knowledge
-              base upload in T04.
+              Upload your help docs to the knowledge base (T04), then the AI starts answering from
+              them (T07).
             </CardDescription>
           </Card>
         )}
+        {roleAtLeast(user.role, 'admin') && <InstallCard />}
       </div>
     </div>
   );

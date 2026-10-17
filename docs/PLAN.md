@@ -12,15 +12,15 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[##------------------] 12%`  **2 / 17 tasks done** (10 / 108 est. hours)  
+`[####----------------] 18%`  **3 / 17 tasks done** (15 / 108 est. hours)  
 Last update: 2026-10-17  
-**Current / next task:** T03 Tenant onboarding (Not started)
+**Current / next task:** T04 Knowledge base upload (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
 | [T01](#t01---repo-setup-monorepo) | Week 1 | Repo setup (monorepo) | Done | 2026-10-17 |
 | [T02](#t02---auth-with-roles) | Week 1 | Auth with roles | Done | 2026-10-17 |
-| [T03](#t03---tenant-onboarding) | Week 1 | Tenant onboarding | Not started |  |
+| [T03](#t03---tenant-onboarding) | Week 1 | Tenant onboarding | Done | 2026-10-17 |
 | [T04](#t04---knowledge-base-upload) | Week 2 | Knowledge base upload | Not started |  |
 | [T05](#t05---chunking-and-embeddings) | Week 2 | Chunking and embeddings | Not started |  |
 | [T06](#t06---background-ingestion-job) | Week 2 | Background ingestion job | Not started |  |
@@ -42,7 +42,7 @@ Last update: 2026-10-17
 <!-- AUTO:MILESTONES -->
 | Week | Dates | Milestone | Release | Outcome | Progress |
 |---|---|---|---|---|---|
-| Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 2/3 |
+| Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 0/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 0/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 0/3 |
@@ -152,27 +152,30 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T03 - Tenant onboarding
 
-`Not started` · est. 5 h · depends on: T02
+`Done` · est. 5 h · depends on: T02 · completed 2026-10-17
 
 **Goal:** A business signs up and gets a tenant, an owner account and a widget public key in under a minute.
 
 **Subtasks**
 
-- [ ] POST /auth/signup creates tenant + owner in one DB transaction
-- [ ] Public key generation (pk_live_ + random) and key rotation endpoint
-- [ ] Branding settings (jsonb): primary color, logo, greeting, launcher position
-- [ ] Allowed domains list per tenant (used by the widget origin check)
-- [ ] Onboarding wizard: company name -> branding -> copy embed snippet
-- [ ] Public GET /widget/config?key=pk_... returns branding only, never secrets
-- [ ] Seed script: demo tenant 'Acme Bikes' with sample docs for the live demo
+- [x] POST /auth/signup creates tenant + owner in one DB transaction and signs the owner in
+- [x] Public key generation (pk_live_ + 144-bit random) and a rotation endpoint that invalidates the old key at once
+- [x] Branding settings (jsonb): primary colour, logo, greeting, launcher position, with zod validation
+- [x] Allowed domains per tenant, normalised (scheme/port/path stripped), enforced against the Origin header
+- [x] Onboarding wizard: company name -> branding with live preview -> allowed domains + embed snippet
+- [x] Settings page: company, branding, domains, widget key with copy + rotate
+- [x] Public GET /widget/config?key=pk_... returns tenant name + branding only; CORS open for widget routes only
+- [x] Widget fetches its config and applies the tenant's colour, logo, greeting and position
+- [x] Seed: Acme Bikes branding, allowed domains and sample knowledge-base docs (ingested from T04)
+- [x] GET / on the API returns a short info document instead of 404
 
 **Acceptance criteria**
 
-- [ ] Signup lands on a dashboard showing the embed snippet with that tenant's key
-- [ ] Rotating the key invalidates the old key immediately
-- [ ] Widget config endpoint exposes only public fields (test)
+- [x] Signup lands on a dashboard showing the embed snippet with that tenant's key
+- [x] Rotating the key invalidates the old key immediately
+- [x] Widget config endpoint exposes only public fields (test)
 
-**Deliverables:** Signup + onboarding wizard, Branding settings, Seed script  
+**Deliverables:** Signup + onboarding wizard, Settings page, Widget config endpoint, Seed + sample docs  
 **Standout feature:** Widget theming per tenant  
 **Interview talking point:** The public key identifies the tenant; the allowed-domains check stops someone else embedding a client's widget.
 

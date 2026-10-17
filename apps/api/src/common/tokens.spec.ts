@@ -1,4 +1,5 @@
-import { generateToken, hashToken } from './tokens';
+import { PUBLIC_KEY_PATTERN } from '@supportpilot/shared';
+import { generatePublicKey, generateToken, hashToken } from './tokens';
 
 describe('tokens', () => {
   it('generates long, unique, URL-safe tokens', () => {
@@ -13,5 +14,12 @@ describe('tokens', () => {
     expect(hashToken(token)).toEqual(hashToken(token));
     expect(hashToken(token)).not.toContain(token);
     expect(hashToken(token)).toHaveLength(64);
+  });
+
+  it('generates unique pk_live_ public keys', () => {
+    const key = generatePublicKey();
+    expect(key).toMatch(PUBLIC_KEY_PATTERN);
+    expect(key.startsWith('pk_live_')).toBe(true);
+    expect(generatePublicKey()).not.toEqual(key);
   });
 });

@@ -1,6 +1,8 @@
 // Demo data for local development and the live demo: tenant "Acme Bikes" with one user per role.
-// Safe to run repeatedly. T03 adds branding + sample knowledge base docs.
+// Safe to run repeatedly: creates what is missing and keeps the demo tenant's settings current.
+// Sample knowledge-base docs live in seed-data/acme-bikes (ingested once T04-T06 exist).
 import { hash } from '@node-rs/argon2';
+import { DEFAULT_BRANDING } from '@supportpilot/shared';
 import { loadDotEnv } from '@supportpilot/shared/node';
 import { eq } from 'drizzle-orm';
 import { createDb, createPool } from './index';
@@ -14,6 +16,17 @@ const DEMO_USERS = [
   { email: 'agent@acme.test', name: 'Aisha Agent', role: 'agent' },
 ] as const;
 
+const DEMO_TENANT = {
+  name: 'Acme Bikes',
+  publicKey: DEMO_PUBLIC_KEY,
+  allowedDomains: ['localhost', '127.0.0.1'],
+  branding: {
+    ...DEFAULT_BRANDING,
+    primaryColor: '#0f766e',
+    greeting: 'Hi! Ask me anything about Acme Bikes: sizing, delivery, returns or warranty.',
+  },
+};
+
 async function main(): Promise<void> {
   loadDotEnv(__dirname);
   const url = process.env.DATABASE_URL;
@@ -21,31 +34,41 @@ async function main(): Promise<void> {
   const pool = createPool(url, { max: 1 });
   const db = createDb(pool);
   try {
-    const existing = await db.query.tenants.findFirst({
+    let tenant = await db.query.tenants.findFirst({
       where: eq(tenants.publicKey, DEMO_PUBLIC_KEY),
     });
-    if (existing) {
-      console.log(`Demo tenant already exists (${existing.name}). Nothing to do.`);
-      return;
-    }
-    const passwordHash = await hash(DEMO_PASSWORD);
-    await db.transaction(async (tx) => {
-      const [tenant] = await tx
+    if (tenant) {
+      if (!tenant.onboardingCompletedAt) {
+        await db
+          .update(tenants)
+          .set({
+            branding: DEMO_TENANT.branding,
+            allowedDomains: DEMO_TENANT.allowedDomains,
+            onboardingCompletedAt: new Date(),
+          })
+          .where(eq(tenants.id, tenant.id));
+        console.log('Demo tenant updated with branding, allowed domains and finished onboarding.');
+      } else {
+        console.log(`Demo tenant already exists (${tenant.name}).`);
+      }
+    } else {
+      [tenant] = await db
         .insert(tenants)
-        .values({
-          name: 'Acme Bikes',
-          publicKey: DEMO_PUBLIC_KEY,
-          allowedDomains: ['localhost'],
-          branding: { primaryColor: '#3b3f8c', greeting: 'Hi! Ask me anything about Acme Bikes.' },
-        })
+        .values({ ...DEMO_TENANT, onboardingCompletedAt: new Date() })
         .returning();
-      await tx
-        .insert(users)
-        .values(DEMO_USERS.map((u) => ({ ...u, tenantId: tenant!.id, passwordHash })));
-    });
-    console.log('Seeded demo tenant "Acme Bikes". Log in with any of:');
-    for (const u of DEMO_USERS)
-      console.log(`  ${u.role.padEnd(6)} ${u.email}  /  ${DEMO_PASSWORD}`);
+      console.log('Created demo tenant "Acme Bikes".');
+    }
+
+    const passwordHash = await hash(DEMO_PASSWORD);
+    for (const user of DEMO_USERS) {
+      const existing = await db.query.users.findFirst({ where: eq(users.email, user.email) });
+      if (!existing) {
+        await db.insert(users).values({ ...user, tenantId: tenant!.id, passwordHash });
+        console.log(`  created ${user.role} ${user.email}`);
+      }
+    }
+    console.log(`Demo logins: ${DEMO_USERS.map((u) => u.email).join(', ')} / ${DEMO_PASSWORD}`);
+    console.log(`Widget key: ${DEMO_PUBLIC_KEY}`);
   } finally {
     await pool.end();
   }

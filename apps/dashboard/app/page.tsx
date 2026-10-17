@@ -35,12 +35,20 @@ export default async function Home() {
           Upload your docs, embed one script tag, and let AI answer your customers. Low-confidence
           chats are handed to your team in real time.
         </p>
-        <Link
-          href="/login"
-          className="mt-6 inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand/90"
-        >
-          Log in
-        </Link>
+        <div className="mt-6 flex gap-3">
+          <Link
+            href="/signup"
+            className="inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand/90"
+          >
+            Create a workspace
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex h-9 items-center rounded-md border border-slate-300 bg-white px-4 text-sm font-medium hover:bg-slate-50"
+          >
+            Log in
+          </Link>
+        </div>
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

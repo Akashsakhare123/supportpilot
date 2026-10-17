@@ -9,3 +9,8 @@ export function generateToken(): string {
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
+
+/** Widget public key: identifies a tenant to the widget. Public by design, rotatable. */
+export function generatePublicKey(): string {
+  return `pk_live_${randomBytes(18).toString('base64url')}`;
+}
