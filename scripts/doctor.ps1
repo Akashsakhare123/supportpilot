@@ -135,8 +135,8 @@ function Test-DevServers {
   Write-Log ''
   Write-Log '=== Dev servers smoke test (pnpm dev) ==='
   if ((Get-HttpStatus 'http://localhost:4000/health' 2) -ne 0 -or (Get-HttpStatus 'http://localhost:3000' 2) -ne 0) {
-    Write-Log '  skipped: something is already running on port 3000 or 4000 (stop pnpm dev and run again)'
-    Add-Result 'Dev servers (pnpm dev)' $true 'skipped: ports 3000/4000 already in use'
+    Write-Log '  ports 3000/4000 are used by something that is not a SupportPilot dev server'
+    Add-Result 'Dev servers (pnpm dev)' $false 'ports 3000/4000 in use by another program'
     return
   }
   # Fresh log file per run: a leftover process from an earlier run may still hold the old one open.
@@ -146,16 +146,20 @@ function Test-DevServers {
   $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "pnpm dev > `"$devLog`" 2>&1" `
     -WorkingDirectory $Root -WindowStyle Hidden -PassThru
   $api = 0; $web = 0
-  for ($i = 0; $i -lt 60 -and ($api -ne 200 -or $web -ne 200); $i++) {
-    Start-Sleep -Seconds 3
-    if ($proc.HasExited) { break }
-    if ($api -ne 200) { $api = Get-HttpStatus 'http://localhost:4000/health' 5 }
-    # First request makes Next.js compile the page, so allow a long timeout.
-    if ($api -eq 200 -and $web -ne 200) { $web = Get-HttpStatus 'http://localhost:3000/login' 60 }
+  try {
+    for ($i = 0; $i -lt 60 -and ($api -ne 200 -or $web -ne 200); $i++) {
+      Start-Sleep -Seconds 3
+      if ($proc.HasExited) { break }
+      if ($api -ne 200) { $api = Get-HttpStatus 'http://localhost:4000/health' 5 }
+      # First request makes Next.js compile the page, so allow a long timeout.
+      if ($api -eq 200 -and $web -ne 200) { $web = Get-HttpStatus 'http://localhost:3000/login' 60 }
+    }
+  } finally {
+    $timer.Stop()
+    & taskkill.exe /PID $proc.Id /T /F 2>&1 | Out-Null
+    & (Join-Path $PSScriptRoot 'stop-dev.ps1') -KeepNext 2>&1 | Out-Null
+    Start-Sleep -Seconds 2
   }
-  $timer.Stop()
-  & taskkill.exe /PID $proc.Id /T /F 2>&1 | Out-Null
-  Start-Sleep -Seconds 2
   if ($proc.HasExited -and ($api -ne 200 -or $web -ne 200)) { Write-Log "  pnpm dev exited early (exit code $($proc.ExitCode))" }
   Write-Log "  API /health -> $api, dashboard /login -> $web ($([math]::Round($timer.Elapsed.TotalSeconds))s)"
   if ($api -ne 200 -or $web -ne 200) {
@@ -240,6 +244,14 @@ if ($docker) {
 }
 
 # ---------------------------------------------------------- 2. project setup
+# A dev server left running from an earlier run would fight with `pnpm build` over .next/.
+Write-Host ''
+Write-Host '=== Stop leftover dev servers ===' -ForegroundColor Cyan
+Write-Log ''
+Write-Log '=== Stop leftover dev servers ==='
+& (Join-Path $PSScriptRoot 'stop-dev.ps1') -KeepNext 2>&1 | ForEach-Object { "$_" } | Tee-Object -Variable stopOut | Out-Host
+if ($stopOut) { $stopOut | ForEach-Object { Write-Log "  $_" } }
+
 $envFile = Join-Path $Root '.env'
 $envExample = Join-Path $Root '.env.example'
 if (-not (Test-Path $envFile)) {

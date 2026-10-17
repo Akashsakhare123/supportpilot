@@ -68,7 +68,7 @@ export default function AcceptInvitePage() {
             <p className="mt-1 text-sm text-slate-500">
               You were invited as <strong>{invite.role}</strong> ({invite.email}).
             </p>
-            <form onSubmit={onSubmit} className="mt-6 space-y-4">
+            <form method="post" onSubmit={onSubmit} className="mt-6 space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name">Your name</Label>
                 <Input id="name" name="name" autoComplete="name" required />

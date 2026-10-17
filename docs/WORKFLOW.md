@@ -109,6 +109,7 @@ pnpm eval                       # RAG eval set (T14, needs an LLM key)
 
 - Run `scripts\doctor.cmd` (double-click works). It checks Node 22+, pnpm, Git, Docker (and starts Docker Desktop), Python
   + libs, then installs, starts the database, migrates and runs every check. The log goes to `.claude-logs\doctor.log`.
+- `scripts\stop-dev.cmd` stops every leftover SupportPilot dev server (by repo path and ports 3000/4000/5173) and clears the dashboard's `.next` cache. The doctor runs it first, so `pnpm build` never fights a running `next dev` over `.next/`.
 - Docker Postgres uses host port **5434** because this PC also has PostgreSQL 14 and 18 installed locally.
 - The repo lives inside OneDrive. Pause OneDrive syncing while `pnpm install` runs the first time (OneDrive icon >
   Pause syncing > 2 hours); `node_modules` holds thousands of files. Moving the repo to e.g. `C:\dev\supportpilot` later

@@ -96,7 +96,7 @@ pnpm db:seed                    # demo tenant Acme Bikes
 pnpm dev                        # api :4000, dashboard :3000, widget demo :5173, worker
 ```
 
-`pnpm dev` builds `packages/shared` and `packages/db` once, then watches the apps. If you edit those packages while it runs, also run `pnpm dev:packages` in a second terminal.
+`pnpm dev` builds `packages/shared` and `packages/db` once, then watches the apps. If you edit those packages while it runs, also run `pnpm dev:packages` in a second terminal. If ports 3000 / 4000 / 5173 are stuck or the dashboard shows "Cannot find module" errors, run `scripts\stop-dev.cmd` and start `pnpm dev` again.
 
 | URL | What |
 |---|---|

@@ -45,7 +45,7 @@ function LoginForm() {
     <Card className="w-full max-w-sm">
       <p className="text-sm font-semibold tracking-wide text-brand uppercase">SupportPilot</p>
       <h1 className="mt-1 text-xl font-bold">Log in to your dashboard</h1>
-      <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
+      <form method="post" onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
           <Input id="email" name="email" type="email" autoComplete="email" required autoFocus />

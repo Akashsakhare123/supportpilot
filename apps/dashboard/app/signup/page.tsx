@@ -44,7 +44,7 @@ export default function SignupPage() {
         <p className="mt-1 text-sm text-slate-500">
           Free plan, no card needed. Takes under a minute.
         </p>
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+        <form method="post" onSubmit={onSubmit} className="mt-6 space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="companyName">Company name</Label>
             <Input
