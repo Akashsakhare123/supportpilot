@@ -298,22 +298,23 @@
       "week": "Week 3",
       "title": "Embeddable widget",
       "notes": "Single script tag",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-18",
+      "completed": "2026-10-18",
       "est_hours": 8,
       "depends": [
         "T07"
       ],
       "goal": "Any website adds one script tag and gets a branded chat bubble.",
       "subtasks": [
-        "Preact + Vite library build to a single IIFE widget.js, target < 50 KB gzipped",
-        "Render inside Shadow DOM so host-page CSS and widget CSS never clash",
+        "Preact + Vite library build to a single IIFE widget.js; size check fails the build above 60 KB gzipped",
+        "Render inside Shadow DOM so host-page CSS and widget CSS never clash (demo page with hostile CSS)",
         "Read data-key from the script tag, fetch /widget/config, apply branding",
-        "Socket.io client on the /widget namespace, authenticated with public key + anonymous visitor id",
-        "UI: launcher, chat panel, streaming text, source links, 'Talk to a human' button, reconnect state",
-        "Origin check against the tenant's allowed domains on connect",
-        "Demo host page and install snippet shown in the dashboard"
+        "Socket.io /widget namespace: handshake with public key + anonymous visitor id, allowed-domains check on connect",
+        "Streaming answers (message:delta / message:done) through the same ChatService; one answer at a time, 20 messages/min",
+        "UI: launcher, chat panel, streaming text with typing indicator, sources, 'Talk to a person', reconnect banner, mobile full screen",
+        "Conversation survives a page reload (history only for the owning visitor)",
+        "Demo host page, preview link and install snippet in the dashboard"
       ],
       "acceptance": [
         "Pasting the snippet into a plain HTML file shows a working, branded widget",

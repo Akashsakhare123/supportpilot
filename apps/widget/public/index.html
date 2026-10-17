@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acme Bikes - SupportPilot widget demo</title>
+    <style>
+      body {
+        font-family: Georgia, serif;
+        max-width: 680px;
+        margin: 64px auto;
+        padding: 0 16px;
+        color: #222;
+        line-height: 1.6;
+      }
+      /* Hostile host styles: the widget must look the same anyway (Shadow DOM). */
+      * {
+        letter-spacing: 0.04em;
+      }
+      button,
+      textarea,
+      input {
+        background: hotpink !important;
+        font-size: 30px !important;
+        border: 4px dashed lime !important;
+      }
+      p {
+        color: darkred;
+      }
+      div {
+        outline: 1px dotted orange;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Acme Bikes</h1>
+    <p>
+      This plain HTML page plays a client website. It has deliberately ugly CSS for buttons,
+      paragraphs and inputs; the chat bubble in the corner is not affected.
+    </p>
+    <p>
+      Try: "How long is the frame warranty?", "Can I return a bike?" or "Do you sell skateboards?"
+    </p>
+    <button type="button">A host-page button (hot pink on purpose)</button>
+
+    <!-- The install snippet from the dashboard, unchanged: -->
+    <script src="/widget.js" data-supportpilot data-key="pk_test_demo" async></script>
+  </body>
+</html>

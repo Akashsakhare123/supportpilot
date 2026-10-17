@@ -289,7 +289,22 @@ Pipeline in `ChatService.respond()` (the socket gateway in T08 / T09 calls the s
 
 Providers come from env. `LLM_PROVIDER=mock` (default) is an offline extractive stand-in that reads the same prompt and cites passages, so the whole pipeline runs and is tested without a key. `LLM_PROVIDER=openai` works with OpenAI or any OpenAI-compatible server (`OPENAI_BASE_URL`, e.g. a local Ollama). If the model call fails, the customer gets a polite fallback offering a person.
 
-## 7. Real-time events *(planned, contract lives in `packages/shared`)*
+## 6e. Embeddable widget (T08)
+
+```html
+<script src="https://widget.example.com/widget.js" data-supportpilot data-key="pk_live_..." async></script>
+```
+
+- **One IIFE bundle** (Preact + socket.io-client) built by Vite in library mode. `scripts/check-size.mjs` fails the build above 60 KB gzipped; widget code imports only *types* from `@supportpilot/shared`, so zod never reaches client websites.
+- **Shadow DOM**: the widget mounts in `<div id="supportpilot-widget">` with an open shadow root and `:host { all: initial }`. Host CSS cannot style it, and its CSS cannot leak out. The demo page (`apps/widget/public/index.html`) has deliberately hostile CSS to prove it.
+- **Lazy connection**: `GET /widget/config` on load (branding; hidden on 403 / 404). The Socket.io connection opens only when the visitor first opens the chat.
+- **Identity**: an anonymous random `visitorId` and the current `conversationId` are kept in `localStorage` per widget key, with an in-memory fallback when storage is blocked. No cookies, no fingerprinting. After a reload, `conversation:history` restores the chat, but only for the visitor that owns it.
+- **Handshake check**: namespace middleware validates `{ key, visitorId }` and the tenant's allowed domains against the `Origin` header (same rules as `/widget/config` and `POST /v1/chat`). Refusals arrive as `connect_error` with the reason.
+- **Per-connection limits**: one answer at a time (`busy`), 20 messages per minute (`rate_limited`). Answers stream as `message:delta` and finish with `message:done`, from the same `ChatService` as SSE. Closing the tab aborts generation.
+- **UI**: launcher, branded header, streaming text with a typing indicator, source list (links for URL imports), "Talk to a person", reconnect banner, Escape to close, full screen on phones, reduced-motion support.
+- **Local development**: `pnpm dev` rebuilds `dist/widget.js` on change and serves `dist/` on :5173. The dashboard's install snippet and "Preview on a demo page" link (`try.html?key=`) load the real bundle.
+
+## 7. Real-time events *(widget namespace live since T08; agent namespace in T09; contract in `packages/shared/src/realtime.ts`)*
 
 | Namespace | Event | Direction | Payload |
 |---|---|---|---|
@@ -386,5 +401,9 @@ never pull in `node:fs`.
 | D35 | Offline `mock-extractive-v1` LLM as the default provider | Require an API key; canned responses | Free local development and CI, deterministic tests, yet it exercises the real prompt, citations and confidence path. |
 | D36 | Mask PII in what is sent to the AI provider, keep the original for agents | Mask everything, or nothing | Customers' contact details never leave for a third-party model, while agents can still help the person. |
 | D37 | Offline embeddings bumped to `local-hash-v2` (fixed stemming); chunks keep their model name and the seed re-embeds outdated ones | Silent in-place change | Shows why `embedding_model` is stored: old and new vectors are never mixed, and re-indexing upgrades a document. |
+| D38 | Socket.io for the widget, SSE kept for `POST /v1/chat` | One transport only | Sockets are needed anyway for agent replies and typing (T09-T11); SSE stays as the simple public HTTP API. Both call `ChatService.respond`. |
+| D39 | Widget imports only types from the shared package; constants duplicated where needed | Import shared values | Importing values would bundle zod (+15 KB gzipped) into every client website. |
+| D40 | Anonymous `visitorId` in localStorage, history only for the owning visitor | Cookies, login for visitors | Works on any site without cookie banners; a leaked conversation id is useless without the matching visitor id. |
+| D41 | Widget dev server serves the built bundle (build --watch + preview) | Vite dev modules | The demo page and install snippet test exactly what client sites load, including the size budget. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

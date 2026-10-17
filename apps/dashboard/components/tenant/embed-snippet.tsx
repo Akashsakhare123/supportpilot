@@ -25,6 +25,14 @@ export function EmbedSnippet({ publicKey }: { publicKey: string }) {
           {copied ? 'Copied' : 'Copy snippet'}
         </Button>
         <p className="text-xs text-slate-500">Paste it just before &lt;/body&gt; on every page.</p>
+        <a
+          className="text-xs font-medium text-brand underline"
+          href={`${WIDGET_URL.replace(/\/+$/, '')}/try.html?key=${encodeURIComponent(publicKey)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Preview on a demo page
+        </a>
       </div>
     </div>
   );

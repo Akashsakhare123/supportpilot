@@ -35,12 +35,22 @@
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
   font-size: 24px;
 }
+.sp-launcher:focus-visible,
+.sp-icon-button:focus-visible,
+.sp-send:focus-visible,
+.sp-link:focus-visible {
+  outline: 2px solid var(--sp-brand);
+  outline-offset: 2px;
+}
 .sp-panel {
   position: absolute;
   right: 0;
   bottom: 72px;
-  width: 340px;
+  width: 370px;
+  height: min(600px, calc(100vh - 110px));
   max-width: calc(100vw - 40px);
+  display: flex;
+  flex-direction: column;
   background: #fff;
   color: #1f2333;
   border-radius: 14px;
@@ -48,6 +58,7 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
   font-size: 14px;
   line-height: 1.45;
+  text-align: left;
 }
 .sp-left .sp-panel {
   right: auto;
@@ -56,11 +67,17 @@
 .sp-header {
   background: var(--sp-brand);
   color: #fff;
-  padding: 14px 16px;
+  padding: 12px 12px 12px 16px;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.sp-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sp-logo {
   width: 24px;
@@ -69,19 +86,185 @@
   background: #fff;
   object-fit: contain;
 }
-.sp-body {
+.sp-icon-button {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: #fff;
+}
+.sp-icon-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.sp-status {
+  background: #fff7e6;
+  color: #8a5a00;
+  font-size: 12px;
+  padding: 6px 16px;
+}
+.sp-messages {
+  flex: 1;
+  overflow-y: auto;
   padding: 16px;
-  color: #4a4f66;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fafbfc;
+}
+.sp-line {
+  display: flex;
+}
+.sp-customer {
+  justify-content: flex-end;
 }
 .sp-bubble {
   margin: 0;
-  background: #f1f2f6;
-  border-radius: 10px;
+  max-width: 85%;
+  background: #eef0f5;
+  border-radius: 12px;
   padding: 8px 12px;
   color: #1f2333;
+  overflow-wrap: anywhere;
 }
-.sp-note {
-  margin: 10px 0 0;
+.sp-bubble p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.sp-customer .sp-bubble {
+  background: var(--sp-brand);
+  color: #fff;
+}
+.sp-agent .sp-bubble {
+  background: #e8f5ee;
+}
+.sp-agent {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2f7a52;
+}
+.sp-notice {
+  margin: 0 auto;
   font-size: 12px;
   color: #8a8fa6;
+  text-align: center;
+}
+.sp-sources {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 11px;
+  color: #6b7088;
+}
+.sp-sources a {
+  color: var(--sp-brand);
+  text-decoration: underline;
+}
+.sp-typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+.sp-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9aa0b5;
+  animation: sp-blink 1.2s infinite ease-in-out;
+}
+.sp-typing i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.sp-typing i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes sp-blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.sp-composer {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #e6e8ef;
+  background: #fff;
+}
+.sp-composer textarea {
+  all: unset;
+  flex: 1;
+  min-height: 20px;
+  max-height: 96px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid #d6d9e3;
+  border-radius: 8px;
+  font: inherit;
+  color: #1f2333;
+  white-space: pre-wrap;
+  box-sizing: border-box;
+}
+.sp-composer textarea:focus {
+  border-color: var(--sp-brand);
+}
+.sp-send {
+  all: unset;
+  cursor: pointer;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--sp-brand);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+}
+.sp-send:disabled,
+.sp-link:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.sp-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 10px;
+  font-size: 11px;
+  color: #9aa0b5;
+  background: #fff;
+}
+.sp-link {
+  all: unset;
+  cursor: pointer;
+  color: var(--sp-brand);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .sp-root .sp-panel {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    max-width: none;
+    height: 100%;
+    border-radius: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-typing i {
+    animation: none;
+  }
 }

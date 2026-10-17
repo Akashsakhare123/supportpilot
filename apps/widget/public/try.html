@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SupportPilot widget preview</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 640px;
+        margin: 64px auto;
+        padding: 0 16px;
+        color: #333;
+        line-height: 1.6;
+      }
+      code {
+        background: #f2f2f2;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Widget preview</h1>
+    <p>
+      This page loads your workspace's widget with the key from the address bar
+      (<code>?key=pk_...</code>). It works when your allowed domains list is empty or includes
+      <code>localhost</code>.
+    </p>
+    <script>
+      // Same as the install snippet, with the key taken from ?key=.
+      var key = new URLSearchParams(location.search).get('key') || 'pk_test_demo';
+      var script = document.createElement('script');
+      script.src = '/widget.js';
+      script.async = true;
+      script.setAttribute('data-supportpilot', '');
+      script.setAttribute('data-key', key);
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>

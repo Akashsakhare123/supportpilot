@@ -23,7 +23,14 @@ import {
   type Tenant,
   usageEvents,
 } from '@supportpilot/db';
-import { CHAT_LIMITS, type ChatDone, type ChatSource, redactPii } from '@supportpilot/shared';
+import {
+  CHAT_LIMITS,
+  type ChatDone,
+  type ChatSource,
+  type HistoryMessage,
+  redactPii,
+  WIDGET_LIMITS,
+} from '@supportpilot/shared';
 import { DRIZZLE } from '../database/database.module';
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
@@ -230,6 +237,7 @@ export class ChatService {
             chunkId: hit.chunkId,
             documentId: hit.documentId,
             documentTitle: hit.documentTitle,
+            documentUrl: hit.documentUrl,
             headingPath: hit.headingPath,
             snippet: hit.content.slice(0, 200),
             similarity: Math.round(hit.similarity * 1000) / 1000,
@@ -323,6 +331,42 @@ export class ChatService {
       // Status changes (ai -> waiting) are the HandoffService's job in T10.
       conversationStatus: conversation.status,
     };
+  }
+
+  /**
+   * A visitor's own conversation for the widget after a page reload (last 50 messages, oldest
+   * first). null when it does not exist or belongs to another tenant or visitor.
+   */
+  async visitorHistory(
+    tenantId: string,
+    visitorId: string,
+    conversationId: string,
+  ): Promise<HistoryMessage[] | null> {
+    const conversation = await this.db.query.conversations.findFirst({
+      where: and(
+        eq(conversations.id, conversationId),
+        eq(conversations.tenantId, tenantId),
+        eq(conversations.visitorId, visitorId),
+      ),
+      columns: { id: true },
+    });
+    if (!conversation) return null;
+    const rows = await this.db
+      .select({
+        id: messages.id,
+        sender: messages.sender,
+        content: messages.content,
+        sources: messages.sources,
+        createdAt: messages.createdAt,
+      })
+      .from(messages)
+      .where(eq(messages.conversationId, conversationId))
+      .orderBy(desc(messages.createdAt))
+      .limit(WIDGET_LIMITS.historyMessages);
+    return rows
+      .reverse()
+      .filter((m) => m.sender !== 'system')
+      .map((m) => ({ ...m, createdAt: m.createdAt.toISOString() }));
   }
 
   /** Messages of a conversation, oldest first (playground history, tests). */

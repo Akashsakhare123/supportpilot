@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[########------------] 41%`  **7 / 17 tasks done** (40 / 108 est. hours)  
-Last update: 2026-10-17  
-**Current / next task:** T08 Embeddable widget (Not started)
+`[#########-----------] 47%`  **8 / 17 tasks done** (48 / 108 est. hours)  
+Last update: 2026-10-18  
+**Current / next task:** T09 Agent inbox (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -25,7 +25,7 @@ Last update: 2026-10-17
 | [T05](#t05---chunking-and-embeddings) | Week 2 | Chunking and embeddings | Done | 2026-10-17 |
 | [T06](#t06---background-ingestion-job) | Week 2 | Background ingestion job | Done | 2026-10-17 |
 | [T07](#t07---rag-chat-api) | Week 3 | RAG chat API | Done | 2026-10-17 |
-| [T08](#t08---embeddable-widget) | Week 3 | Embeddable widget | Not started |  |
+| [T08](#t08---embeddable-widget) | Week 3 | Embeddable widget | Done | 2026-10-18 |
 | [T09](#t09---agent-inbox) | Week 4 | Agent inbox | Not started |  |
 | [T10](#t10---handoff-logic) | Week 4 | Handoff logic | Not started |  |
 | [T11](#t11---typing-presence-history) | Week 4 | Typing, presence, history | Not started |  |
@@ -44,7 +44,7 @@ Last update: 2026-10-17
 |---|---|---|---|---|---|
 | Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 3/3 |
-| Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 1/2 |
+| Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 2/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 0/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
 | Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 0/4 |
@@ -286,25 +286,26 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T08 - Embeddable widget
 
-`Not started` · est. 8 h · depends on: T07
+`Done` · est. 8 h · depends on: T07 · completed 2026-10-18
 
 **Goal:** Any website adds one script tag and gets a branded chat bubble.
 
 **Subtasks**
 
-- [ ] Preact + Vite library build to a single IIFE widget.js, target < 50 KB gzipped
-- [ ] Render inside Shadow DOM so host-page CSS and widget CSS never clash
-- [ ] Read data-key from the script tag, fetch /widget/config, apply branding
-- [ ] Socket.io client on the /widget namespace, authenticated with public key + anonymous visitor id
-- [ ] UI: launcher, chat panel, streaming text, source links, 'Talk to a human' button, reconnect state
-- [ ] Origin check against the tenant's allowed domains on connect
-- [ ] Demo host page and install snippet shown in the dashboard
+- [x] Preact + Vite library build to a single IIFE widget.js; size check fails the build above 60 KB gzipped
+- [x] Render inside Shadow DOM so host-page CSS and widget CSS never clash (demo page with hostile CSS)
+- [x] Read data-key from the script tag, fetch /widget/config, apply branding
+- [x] Socket.io /widget namespace: handshake with public key + anonymous visitor id, allowed-domains check on connect
+- [x] Streaming answers (message:delta / message:done) through the same ChatService; one answer at a time, 20 messages/min
+- [x] UI: launcher, chat panel, streaming text with typing indicator, sources, 'Talk to a person', reconnect banner, mobile full screen
+- [x] Conversation survives a page reload (history only for the owning visitor)
+- [x] Demo host page, preview link and install snippet in the dashboard
 
 **Acceptance criteria**
 
-- [ ] Pasting the snippet into a plain HTML file shows a working, branded widget
-- [ ] Host-page CSS does not affect the widget and vice versa
-- [ ] CI fails if the bundle grows beyond 60 KB gzipped
+- [x] Pasting the snippet into a plain HTML file shows a working, branded widget
+- [x] Host-page CSS does not affect the widget and vice versa
+- [x] CI fails if the bundle grows beyond 60 KB gzipped
 
 **Deliverables:** widget.js bundle, Demo page, Install snippet  
 **Standout feature:** Widget theming per tenant  

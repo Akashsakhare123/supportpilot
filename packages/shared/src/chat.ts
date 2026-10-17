@@ -50,6 +50,8 @@ export interface ChatSource {
   chunkId: string;
   documentId: string;
   documentTitle: string;
+  /** Link to the original page for URL imports (null for uploaded files). */
+  documentUrl: string | null;
   headingPath: string[];
   /** First ~200 characters of the passage. */
   snippet: string;

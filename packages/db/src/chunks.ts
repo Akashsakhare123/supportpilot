@@ -63,6 +63,8 @@ export interface ChunkSearchHit {
   chunkId: string;
   documentId: string;
   documentTitle: string;
+  /** Public page the chunk came from (URL imports only), for "source" links in the widget. */
+  documentUrl: string | null;
   content: string;
   headingPath: string[];
   /** Cosine similarity, 1 = identical direction, 0 = unrelated. */
@@ -89,6 +91,9 @@ export async function searchChunks(
         chunkId: documentChunks.id,
         documentId: documentChunks.documentId,
         documentTitle: documents.title,
+        documentUrl: sql<
+          string | null
+        >`case when ${documents.sourceType} = 'url' then ${documents.source} else null end`,
         content: documentChunks.content,
         headingPath: documentChunks.headingPath,
         similarity: sql<number>`1 - (${distance})`.mapWith(Number),
