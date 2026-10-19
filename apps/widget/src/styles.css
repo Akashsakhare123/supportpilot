@@ -35,6 +35,19 @@
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
   font-size: 24px;
 }
+.sp-launcher {
+  position: relative;
+}
+.sp-unread {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e11d48;
+  border: 2px solid #fff;
+}
 .sp-launcher:focus-visible,
 .sp-icon-button:focus-visible,
 .sp-send:focus-visible,

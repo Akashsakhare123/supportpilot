@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { createEmbeddingProvider, createLlmProvider } from '@supportpilot/ai';
+import { InboxModule } from '../inbox/inbox.module';
 import { WidgetModule } from '../widget/widget.module';
 import { ChatController } from './chat.controller';
 import { ChatService, EMBEDDING_PROVIDER, LLM_PROVIDER } from './chat.service';
@@ -8,7 +9,7 @@ import { WidgetGateway } from './widget.gateway';
 
 /** RAG chat. Providers come from env: LLM_PROVIDER (mock | openai), EMBEDDING_PROVIDER (local | openai). */
 @Module({
-  imports: [WidgetModule],
+  imports: [WidgetModule, InboxModule],
   controllers: [ChatController, PlaygroundController],
   providers: [
     ChatService,

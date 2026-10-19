@@ -84,6 +84,8 @@ export function App({ publicKey, apiUrl }: AppProps) {
   const [connection, setConnection] = useState<Connection>('idle');
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
+  const [unread, setUnread] = useState(false);
+  const openRef = useRef(false);
   const socket = useRef<WidgetSocket | null>(null);
   const pendingId = useRef<string | null>(null);
   const listEnd = useRef<HTMLDivElement>(null);
@@ -161,6 +163,20 @@ export function App({ publicKey, apiUrl }: AppProps) {
       }
       update(id, { text: done.content, sources: done.sources, pending: false });
     });
+    // Agent replies (and other messages this widget did not stream itself).
+    s.on('message:new', ({ conversationId, message }) => {
+      if (conversationId !== load(conversationKey)) return;
+      setLines((all) =>
+        all.some((line) => line.id === message.id) ? all : [...all, fromHistory(message)],
+      );
+      if (!openRef.current) setUnread(true);
+    });
+    s.on('conversation:status', ({ conversationId, status, agentName }) => {
+      if (conversationId !== load(conversationKey)) return;
+      if (status === 'human') {
+        notice(`${agentName ?? 'A team member'} from our team joined the chat.`);
+      }
+    });
     s.on('message:error', ({ message }) => {
       if (pendingId.current) {
         update(pendingId.current, { pending: false, text: message, role: 'notice' });
@@ -178,7 +194,11 @@ export function App({ publicKey, apiUrl }: AppProps) {
   }, [lines, open]);
 
   useEffect(() => {
-    if (open) input.current?.focus();
+    openRef.current = open;
+    if (open) {
+      setUnread(false);
+      input.current?.focus();
+    }
   }, [open]);
 
   function send(text: string) {
@@ -314,6 +334,7 @@ export function App({ publicKey, apiUrl }: AppProps) {
         onClick={() => setOpen(!open)}
       >
         {open ? <CloseIcon /> : <ChatIcon />}
+        {unread && !open && <span class="sp-unread" aria-label="New message" />}
       </button>
     </div>
   );

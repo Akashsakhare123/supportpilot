@@ -6,7 +6,9 @@ import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
+import { InboxModule } from './inbox/inbox.module';
 import { QueueModule } from './queue/queue.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { RedisModule } from './redis/redis.module';
 import { StorageModule } from './storage/storage.module';
 import { TenantModule } from './tenant/tenant.module';
@@ -19,6 +21,7 @@ import { WidgetModule } from './widget/widget.module';
     DatabaseModule,
     RedisModule,
     QueueModule,
+    RealtimeModule,
     StorageModule,
     AuthModule,
     UsersModule,
@@ -26,6 +29,7 @@ import { WidgetModule } from './widget/widget.module';
     WidgetModule,
     DocumentsModule,
     ChatModule,
+    InboxModule,
     HealthModule,
   ],
   controllers: [AppController],

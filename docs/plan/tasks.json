@@ -334,9 +334,9 @@
       "week": "Week 4",
       "title": "Agent inbox",
       "notes": "Real-time conversation list",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-19",
+      "completed": "2026-10-19",
       "est_hours": 7,
       "depends": [
         "T07",
@@ -344,12 +344,14 @@
       ],
       "goal": "Agents see live conversations and can jump in from the dashboard.",
       "subtasks": [
-        "Socket.io /agent namespace with JWT auth and the Redis adapter for multiple API instances",
-        "Rooms: tenant:{id} and conversation:{id}",
-        "Inbox tabs: Needs agent / Mine / AI-handled / Closed with live unread counts",
-        "Conversation view: full history with AI sources and confidence visible to agents",
-        "Agent reply box: message saved as sender_type=agent and pushed to the widget instantly",
-        "Claim / assign conversation (assigned_agent_id), exclusive claim"
+        "Socket.io /agent namespace with JWT auth in the handshake and the Redis adapter for multiple API instances",
+        "Rooms: tenant:{id} (dashboards) and conversation:{id} (widget); one RealtimeService emits everything",
+        "Inbox tabs: Needs agent / Mine / Other agents / AI-handled / Closed with live counts",
+        "Conversation view: full history with AI sources, confidence and the hand-off flag",
+        "Agent reply box: message saved as sender=agent and pushed to the widget instantly (unread dot when closed)",
+        "Claim / assign conversation (assigned_agent_id), exclusive claim with 409 for the loser",
+        "Knowledge base page updates live from worker status events",
+        "Integration tests with two API instances (widget on one, dashboard on the other)"
       ],
       "acceptance": [
         "A new widget conversation appears in the inbox without a refresh",

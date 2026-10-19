@@ -20,6 +20,7 @@ import {
   widgetSendSchema,
 } from '@supportpilot/shared';
 import type { Namespace, Socket } from 'socket.io';
+import { RealtimeService } from '../realtime/realtime.service';
 import { WidgetService } from '../widget/widget.service';
 import { ChatService } from './chat.service';
 
@@ -65,10 +66,12 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
   constructor(
     private readonly chat: ChatService,
     private readonly widget: WidgetService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   /** Handshake check: the client gets connect_error with the reason if it is refused. */
   afterInit(namespace: WidgetNamespace): void {
+    this.realtime.registerWidget(namespace);
     namespace.use((socket, next) => {
       const auth = widgetAuthSchema.safeParse(socket.handshake.auth);
       if (!auth.success) return next(new Error('Invalid widget key or visitor id'));

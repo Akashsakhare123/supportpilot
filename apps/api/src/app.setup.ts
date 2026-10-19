@@ -3,6 +3,7 @@ import type { ApiEnv } from '@supportpilot/shared/node';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import type { NextFunction, Request, Response } from 'express';
+import { RedisIoAdapter } from './realtime/redis-io.adapter';
 
 /** Widget routes (/widget/*, public API /v1/*) are called by widget.js from client websites. */
 export function isWidgetRoute(path: string): boolean {
@@ -26,6 +27,8 @@ export function configureApp(app: INestApplication, env: ApiEnv): INestApplicati
     (isWidgetRoute(req.path) ? widgetCors : dashboardCors)(req, res, next),
   );
 
+  // Socket.io across API instances (widget + agent namespaces) through Redis.
+  app.useWebSocketAdapter(new RedisIoAdapter(app, env.REDIS_URL));
   app.enableShutdownHooks();
   return app;
 }

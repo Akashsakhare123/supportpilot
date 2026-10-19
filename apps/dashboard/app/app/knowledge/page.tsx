@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { readError, useAuth } from '@/lib/auth';
+import { useAgentEvent } from '@/lib/realtime';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLE: Record<DocumentStatus, string> = {
@@ -57,6 +58,9 @@ export default function KnowledgePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live status from the ingestion worker (polling below stays as a fallback).
+  useAgentEvent('document:status', () => void load());
 
   // While anything is waiting for the ingestion worker, refresh every 5 seconds.
   const pending = docs?.some((d) => d.status === 'queued' || d.status === 'processing') ?? false;

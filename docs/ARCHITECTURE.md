@@ -304,7 +304,24 @@ Providers come from env. `LLM_PROVIDER=mock` (default) is an offline extractive 
 - **UI**: launcher, branded header, streaming text with a typing indicator, source list (links for URL imports), "Talk to a person", reconnect banner, Escape to close, full screen on phones, reduced-motion support.
 - **Local development**: `pnpm dev` rebuilds `dist/widget.js` on change and serves `dist/` on :5173. The dashboard's install snippet and "Preview on a demo page" link (`try.html?key=`) load the real bundle.
 
-## 7. Real-time events *(widget namespace live since T08; agent namespace in T09; contract in `packages/shared/src/realtime.ts`)*
+## 6f. Agent inbox (T09)
+
+**Commands over REST, events over WebSockets.** Agents act through ordinary authenticated endpoints, and every change is pushed to everyone who needs to see it:
+
+| Endpoint (agent+) | Purpose |
+|---|---|
+| `GET /conversations?tab=needs_agent\|mine\|team\|ai\|closed` | List (100 most recent) plus counts for every tab |
+| `GET /conversations/:id` | Full history with AI sources, confidence and the hand-off flag |
+| `POST /conversations/:id/claim` | Take the conversation (status -> `human`); 409 "Already taken by ..." if another agent has it |
+| `POST /conversations/:id/messages` | Agent reply (claims an unassigned conversation first); pushed to the widget instantly |
+
+- **Tabs**: *Needs agent* = `waiting`, or `ai` with a low-confidence answer (`low_confidence_streak > 0`). *Mine* / *Other agents* = `human`, split by `assigned_agent_id`. *AI-handled* = `ai` with no problem. *Closed*. Playground conversations are excluded. The same rules live in SQL filters and in `inboxTabFor()` in the shared package.
+- **Exclusive claim**: one conditional `UPDATE ... WHERE assigned_agent_id IS NULL OR = me RETURNING`. Postgres row locking makes exactly one of two simultaneous clicks win, and the other gets 409 with the winner's name.
+- **Push**: `RealtimeService` is the only place that emits. `conversation:upsert` (summary) and `message:new` go to room `tenant:{id}` on `/agent`. Agent replies and `conversation:status` go to room `conversation:{id}` on `/widget`. `ChatService` notifies the inbox after every customer message and AI answer, and inbox failures never break the customer's chat.
+- **Dashboard socket**: `/agent` handshake with the access token (`auth: { token }`). On "invalid or expired" the dashboard refreshes the token and reconnects. After any reconnect it refetches the list and the open conversation, so missed events cannot leave it stale.
+- **Scaling**: `RedisIoAdapter` (`@socket.io/redis-adapter`) makes room emits reach sockets on every API instance. The integration test runs **two API instances** in one process: the widget is on instance B and the dashboard on A. Worker document-status events are relayed with `namespace.local` (each instance receives the Redis message itself), so dashboards get each event once.
+
+## 7. Real-time events *(widget namespace since T08, agent namespace since T09; contract in `packages/shared/src/realtime.ts`)*
 
 | Namespace | Event | Direction | Payload |
 |---|---|---|---|
@@ -405,5 +422,9 @@ never pull in `node:fs`.
 | D39 | Widget imports only types from the shared package; constants duplicated where needed | Import shared values | Importing values would bundle zod (+15 KB gzipped) into every client website. |
 | D40 | Anonymous `visitorId` in localStorage, history only for the owning visitor | Cookies, login for visitors | Works on any site without cookie banners; a leaked conversation id is useless without the matching visitor id. |
 | D41 | Widget dev server serves the built bundle (build --watch + preview) | Vite dev modules | The demo page and install snippet test exactly what client sites load, including the size budget. |
+| D42 | Agent commands over REST, live updates over Socket.io | Commands as socket events | REST gives status codes, validation pipes, guards and simple tests; sockets only fan out state. |
+| D43 | Exclusive claim with one conditional UPDATE | Redis lock, SELECT then UPDATE | Atomic in the database that owns the data; no lock expiry edge cases; the race is covered by a test. |
+| D44 | `@socket.io/redis-adapter` from the first socket feature | Sticky single instance | Horizontal scaling works from day one and is tested with two API instances. |
+| D45 | One `RealtimeService` emits everything; list refetch on upsert (debounced) | Patch client state from each event | Fewer moving parts: events say "something changed" and REST stays the source of truth; refetch after reconnect covers missed events. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

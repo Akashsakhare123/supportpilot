@@ -28,6 +28,8 @@ interface AuthContextValue {
   setSession(session: LoginResponse): void;
   /** fetch('/api' + path) with the access token; refreshes once and retries on 401. */
   apiFetch(path: string, init?: ApiInit): Promise<Response>;
+  /** Current access token (for the live-updates socket); `refresh` forces a new one. */
+  getAccessToken(refresh?: boolean): Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -144,14 +146,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const getAccessToken = useCallback(
+    async (forceRefresh = false) =>
+      !forceRefresh && tokenRef.current ? tokenRef.current : refresh(),
+    [refresh],
+  );
+
   const reloadUser = useCallback(async () => {
     const res = await apiFetch('/auth/me');
     if (res.ok) setUser((await res.json()) as AuthUser);
   }, [apiFetch]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, signup, logout, reloadUser, setSession, apiFetch }),
-    [status, user, login, signup, logout, reloadUser, setSession, apiFetch],
+    () => ({
+      status,
+      user,
+      login,
+      signup,
+      logout,
+      reloadUser,
+      setSession,
+      apiFetch,
+      getAccessToken,
+    }),
+    [status, user, login, signup, logout, reloadUser, setSession, apiFetch, getAccessToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

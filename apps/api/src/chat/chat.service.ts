@@ -19,6 +19,7 @@ import {
   desc,
   eq,
   messages,
+  type MessageRow,
   searchChunks,
   type Tenant,
   usageEvents,
@@ -32,6 +33,7 @@ import {
   WIDGET_LIMITS,
 } from '@supportpilot/shared';
 import { DRIZZLE } from '../database/database.module';
+import { InboxService } from '../inbox/inbox.service';
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
 export const EMBEDDING_PROVIDER = Symbol('EMBEDDING_PROVIDER');
@@ -72,6 +74,7 @@ export class ChatService {
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
+    private readonly inbox: InboxService,
   ) {}
 
   /**
@@ -109,14 +112,18 @@ export class ChatService {
     sink.meta(conversation.id);
     const pii = redactPii(message);
     const history = await this.recentHistory(conversation.id);
-    await this.db.insert(messages).values({
-      conversationId: conversation.id,
-      tenantId: tenant.id,
-      sender: 'customer',
-      content: message,
-      metadata: pii.found.length ? { piiMasked: pii.found } : {},
-    });
+    const [customerMessage] = await this.db
+      .insert(messages)
+      .values({
+        conversationId: conversation.id,
+        tenantId: tenant.id,
+        sender: 'customer',
+        content: message,
+        metadata: pii.found.length ? { piiMasked: pii.found } : {},
+      })
+      .returning();
     await this.touch(conversation.id, {});
+    await this.notifyInbox(tenant.id, customerMessage!);
 
     // A person is handling (or about to handle) this chat: the AI stays out of it.
     if (conversation.status === 'human' || conversation.status === 'waiting') {
@@ -279,6 +286,17 @@ export class ChatService {
     return rows.reverse().filter((m) => m.sender !== 'system' && m.content.trim());
   }
 
+  /** Live inbox update; a failure here must never break the customer's chat. */
+  private async notifyInbox(tenantId: string, row: MessageRow): Promise<void> {
+    try {
+      await this.inbox.messageStored(tenantId, row);
+    } catch (error) {
+      this.logger.warn(
+        `Inbox update failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   private async touch(conversationId: string, set: Partial<ConversationRow>): Promise<void> {
     await this.db
       .update(conversations)
@@ -312,10 +330,11 @@ export class ChatService {
         needsHuman: answer.needsHuman,
         metadata: { ...answer.metadata, latencyMs },
       })
-      .returning({ id: messages.id });
+      .returning();
     await this.touch(conversation.id, {
       lowConfidenceStreak: answer.needsHuman ? conversation.lowConfidenceStreak + 1 : 0,
     });
+    await this.notifyInbox(tenant.id, saved!);
     await this.db.insert(usageEvents).values({
       tenantId: tenant.id,
       type: 'chat.answer',

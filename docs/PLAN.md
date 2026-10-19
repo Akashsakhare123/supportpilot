@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[#########-----------] 47%`  **8 / 17 tasks done** (48 / 108 est. hours)  
-Last update: 2026-10-18  
-**Current / next task:** T09 Agent inbox (Not started)
+`[###########---------] 53%`  **9 / 17 tasks done** (55 / 108 est. hours)  
+Last update: 2026-10-19  
+**Current / next task:** T10 Handoff logic (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -26,7 +26,7 @@ Last update: 2026-10-18
 | [T06](#t06---background-ingestion-job) | Week 2 | Background ingestion job | Done | 2026-10-17 |
 | [T07](#t07---rag-chat-api) | Week 3 | RAG chat API | Done | 2026-10-17 |
 | [T08](#t08---embeddable-widget) | Week 3 | Embeddable widget | Done | 2026-10-18 |
-| [T09](#t09---agent-inbox) | Week 4 | Agent inbox | Not started |  |
+| [T09](#t09---agent-inbox) | Week 4 | Agent inbox | Done | 2026-10-19 |
 | [T10](#t10---handoff-logic) | Week 4 | Handoff logic | Not started |  |
 | [T11](#t11---typing-presence-history) | Week 4 | Typing, presence, history | Not started |  |
 | [T12](#t12---analytics-dashboard) | Week 5 | Analytics dashboard | Not started |  |
@@ -45,7 +45,7 @@ Last update: 2026-10-18
 | Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 3/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 2/2 |
-| Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 0/3 |
+| Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 1/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
 | Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 0/4 |
 <!-- /AUTO:MILESTONES -->
@@ -315,24 +315,26 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T09 - Agent inbox
 
-`Not started` · est. 7 h · depends on: T07, T08
+`Done` · est. 7 h · depends on: T07, T08 · completed 2026-10-19
 
 **Goal:** Agents see live conversations and can jump in from the dashboard.
 
 **Subtasks**
 
-- [ ] Socket.io /agent namespace with JWT auth and the Redis adapter for multiple API instances
-- [ ] Rooms: tenant:{id} and conversation:{id}
-- [ ] Inbox tabs: Needs agent / Mine / AI-handled / Closed with live unread counts
-- [ ] Conversation view: full history with AI sources and confidence visible to agents
-- [ ] Agent reply box: message saved as sender_type=agent and pushed to the widget instantly
-- [ ] Claim / assign conversation (assigned_agent_id), exclusive claim
+- [x] Socket.io /agent namespace with JWT auth in the handshake and the Redis adapter for multiple API instances
+- [x] Rooms: tenant:{id} (dashboards) and conversation:{id} (widget); one RealtimeService emits everything
+- [x] Inbox tabs: Needs agent / Mine / Other agents / AI-handled / Closed with live counts
+- [x] Conversation view: full history with AI sources, confidence and the hand-off flag
+- [x] Agent reply box: message saved as sender=agent and pushed to the widget instantly (unread dot when closed)
+- [x] Claim / assign conversation (assigned_agent_id), exclusive claim with 409 for the loser
+- [x] Knowledge base page updates live from worker status events
+- [x] Integration tests with two API instances (widget on one, dashboard on the other)
 
 **Acceptance criteria**
 
-- [ ] A new widget conversation appears in the inbox without a refresh
-- [ ] Two agents in two browsers see the same state; claiming is exclusive
-- [ ] Works with 2 API instances running (Redis adapter)
+- [x] A new widget conversation appears in the inbox without a refresh
+- [x] Two agents in two browsers see the same state; claiming is exclusive
+- [x] Works with 2 API instances running (Redis adapter)
 
 **Deliverables:** Agent gateway, Inbox page, Conversation view  
 **Interview talking point:** The Redis adapter fans socket events out across API instances, so the app scales horizontally.

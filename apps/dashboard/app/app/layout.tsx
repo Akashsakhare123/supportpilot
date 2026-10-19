@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
+import { RealtimeProvider } from '@/lib/realtime';
 import { cn } from '@/lib/utils';
 
 const NAV: { href: string; label: string; minRole: Role }[] = [
@@ -88,7 +89,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 px-8 py-8">{children}</main>
+      <main className="min-w-0 flex-1 px-8 py-8">
+        <RealtimeProvider>{children}</RealtimeProvider>
+      </main>
     </div>
   );
 }
