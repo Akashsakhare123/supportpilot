@@ -266,6 +266,39 @@
   font-size: 12px;
   white-space: nowrap;
 }
+.sp-email {
+  background: #fff;
+  border: 1px solid #e6e8ef;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #1f2333;
+}
+.sp-email label {
+  display: block;
+  margin-bottom: 6px;
+}
+.sp-email-row {
+  display: flex;
+  gap: 6px;
+}
+.sp-email input {
+  all: unset;
+  flex: 1;
+  padding: 7px 9px;
+  border: 1px solid #d6d9e3;
+  border-radius: 8px;
+  font: inherit;
+  box-sizing: border-box;
+}
+.sp-email input:focus {
+  border-color: var(--sp-brand);
+}
+.sp-error {
+  margin: 6px 0 0;
+  color: #b42318;
+  font-size: 12px;
+}
 @media (max-width: 480px) {
   .sp-root .sp-panel {
     position: fixed;

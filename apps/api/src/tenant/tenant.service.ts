@@ -34,6 +34,9 @@ export class TenantService {
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.branding !== undefined ? { branding: input.branding } : {}),
         ...(input.allowedDomains !== undefined ? { allowedDomains: input.allowedDomains } : {}),
+        ...(input.handoffThreshold !== undefined
+          ? { handoffThreshold: input.handoffThreshold }
+          : {}),
         ...(input.onboardingCompleted && !current.onboardingCompletedAt
           ? { onboardingCompletedAt: new Date() }
           : {}),

@@ -59,6 +59,8 @@ export interface WidgetServerEvents {
     conversationId: string;
     status: ConversationStatus;
     agentName: string | null;
+    /** For status "waiting": false means nobody can reply now, so the widget asks for an email. */
+    agentsOnline?: boolean;
   }) => void;
   'message:delta': (payload: { conversationId: string; text: string }) => void;
   'message:done': (payload: ChatDone) => void;
@@ -74,6 +76,10 @@ export interface WidgetClientEvents {
         | { ok: true; conversationId: string }
         | { ok: false; code: WidgetErrorCode; message: string },
     ) => void,
+  ) => void;
+  'ticket:email': (
+    payload: { conversationId: string; email: string },
+    ack: (result: { ok: true } | { ok: false; code: WidgetErrorCode; message: string }) => void,
   ) => void;
   'conversation:history': (
     payload: { conversationId: string },
@@ -118,6 +124,10 @@ export interface ConversationSummary {
   /** Confidence of the latest AI answer, if any. */
   lastConfidence: number | null;
   lowConfidenceStreak: number;
+  /** Why it is waiting for a person (status "waiting"). */
+  handoffReason: string | null;
+  /** Left by the customer when no agent was online: follow up by email. */
+  contactEmail: string | null;
   messageCount: number;
   lastMessageAt: string;
   createdAt: string;

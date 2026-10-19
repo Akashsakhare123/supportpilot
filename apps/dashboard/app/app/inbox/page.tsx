@@ -4,6 +4,8 @@ import {
   type AgentMessage,
   type ConversationDetail,
   type ConversationSummary,
+  HANDOFF_REASON_LABELS,
+  type HandoffReason,
   INBOX_TAB_LABELS,
   type InboxList,
   type InboxTab,
@@ -175,11 +177,12 @@ export default function InboxPage() {
     bottom.current?.scrollIntoView({ block: 'end' });
   }, [detail?.messages.length]);
 
-  async function claim() {
+  /** claim | hand-back | close */
+  async function act(action: 'claim' | 'hand-back' | 'close') {
     if (!selected) return;
     setBusy(true);
     setError(null);
-    const res = await apiFetch(`/conversations/${selected}/claim`, { method: 'POST' });
+    const res = await apiFetch(`/conversations/${selected}/${action}`, { method: 'POST' });
     if (!res.ok) setError(await readError(res));
     await loadDetail(selected);
     setBusy(false);
@@ -295,6 +298,11 @@ export default function InboxPage() {
                         {c.assignedAgentId === userId ? 'You' : c.assignedAgentName}
                       </span>
                     )}
+                    {c.contactEmail && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">
+                        Email left
+                      </span>
+                    )}
                     {c.lastConfidence !== null && (
                       <span
                         className={cn(
@@ -323,6 +331,23 @@ export default function InboxPage() {
                     {conversation.origin ?? 'unknown website'} · started{' '}
                     {timeAgo(conversation.createdAt)}
                   </p>
+                  {conversation.status === 'waiting' && conversation.handoffReason && (
+                    <p className="mt-1 text-xs font-medium text-rose-700">
+                      {HANDOFF_REASON_LABELS[conversation.handoffReason as HandoffReason] ??
+                        conversation.handoffReason}
+                    </p>
+                  )}
+                  {conversation.contactEmail && (
+                    <p className="mt-1 text-xs">
+                      Follow up by email:{' '}
+                      <a
+                        className="text-brand underline"
+                        href={`mailto:${conversation.contactEmail}`}
+                      >
+                        {conversation.contactEmail}
+                      </a>
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span
@@ -336,8 +361,18 @@ export default function InboxPage() {
                       ` · ${conversation.assignedAgentId === userId ? 'you' : conversation.assignedAgentName}`}
                   </span>
                   {conversation.status !== 'closed' && !mineNow && !takenByOther && (
-                    <Button onClick={() => void claim()} disabled={busy}>
+                    <Button onClick={() => void act('claim')} disabled={busy}>
                       Take conversation
+                    </Button>
+                  )}
+                  {(mineNow || conversation.status === 'waiting') && (
+                    <Button variant="outline" onClick={() => void act('hand-back')} disabled={busy}>
+                      Hand back to AI
+                    </Button>
+                  )}
+                  {conversation.status !== 'closed' && !takenByOther && (
+                    <Button variant="outline" onClick={() => void act('close')} disabled={busy}>
+                      Close
                     </Button>
                   )}
                 </div>

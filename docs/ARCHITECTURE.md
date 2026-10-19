@@ -119,9 +119,10 @@ stateDiagram-v2
   closed --> [*]
 ```
 
-- All transitions go through one `HandoffService`; invalid transitions throw and are unit-tested.
-- While `status = human`, the RAG pipeline is skipped entirely for that conversation.
-- Threshold is per tenant (default `0.55`). Two low-confidence answers in a row also trigger a handoff.
+- Implemented in T10. The allowed transitions live in `packages/shared/src/handoff.ts` (`HANDOFF_TRANSITIONS`). Every pair of states is unit-tested, both valid and invalid. All changes go through `HandoffService`, which checks the transition and writes it with a guard on the current status (`WHERE status = <from>`), so two concurrent changes cannot both win. Each change records a system message (visible to agents, hidden from the widget) and is pushed live.
+- **Triggers**: a customer asking for a person (`asksForHuman`) moves `ai -> waiting` at once. One answer below the tenant threshold (default `0.55`, set with a slider in Settings, 0.2-0.9) flags the chat under *Needs agent*. Two in a row move it to `waiting`. A confident answer resets the streak.
+- **Waiting**: if an agent is online (dashboard sockets in the tenant room, counted across instances), the customer sees "Connecting you to a person...". If none is online, they get the offline reply and an email form in the widget. The email is saved on the conversation (`contact_email`) and shown in the inbox as "Follow up by email". The conversation stays `waiting` rather than `closed`, so it stays visible under *Needs agent*.
+- **While `waiting` or `human`** the RAG pipeline is skipped entirely (tested). *Hand back to AI* (`human | waiting -> ai`) resumes AI answers. *Close* ends the conversation, and the widget forgets it, so the next question starts a new one. Only the assigned agent can hand back or close a `human` conversation. Playground conversations never change status.
 
 **Confidence score** *(T07; weights and calibration re-tuned with the eval set in T14)*
 
@@ -426,5 +427,8 @@ never pull in `node:fs`.
 | D43 | Exclusive claim with one conditional UPDATE | Redis lock, SELECT then UPDATE | Atomic in the database that owns the data; no lock expiry edge cases; the race is covered by a test. |
 | D44 | `@socket.io/redis-adapter` from the first socket feature | Sticky single instance | Horizontal scaling works from day one and is tested with two API instances. |
 | D45 | One `RealtimeService` emits everything; list refetch on upsert (debounced) | Patch client state from each event | Fewer moving parts: events say "something changed" and REST stays the source of truth; refetch after reconnect covers missed events. |
+| D46 | State machine as data in the shared package + status-guarded UPDATEs | Ad-hoc status writes in services | One table to read, test and explain; the guard makes every transition race-safe. |
+| D47 | Offline tickets stay `waiting` with a contact email | Close them (as first planned) | A closed ticket would vanish from *Needs agent*, but someone still has to reply. |
+| D48 | "Agents online" = live dashboard sockets in the tenant room (`fetchSockets` across instances) | Separate presence store now | Accurate enough for the hand-off decision today; T11 adds presence with heartbeats and away state. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

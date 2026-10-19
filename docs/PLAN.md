@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[###########---------] 53%`  **9 / 17 tasks done** (55 / 108 est. hours)  
+`[############--------] 59%`  **10 / 17 tasks done** (61 / 108 est. hours)  
 Last update: 2026-10-19  
-**Current / next task:** T10 Handoff logic (Not started)
+**Current / next task:** T11 Typing, presence, history (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -27,7 +27,7 @@ Last update: 2026-10-19
 | [T07](#t07---rag-chat-api) | Week 3 | RAG chat API | Done | 2026-10-17 |
 | [T08](#t08---embeddable-widget) | Week 3 | Embeddable widget | Done | 2026-10-18 |
 | [T09](#t09---agent-inbox) | Week 4 | Agent inbox | Done | 2026-10-19 |
-| [T10](#t10---handoff-logic) | Week 4 | Handoff logic | Not started |  |
+| [T10](#t10---handoff-logic) | Week 4 | Handoff logic | Done | 2026-10-19 |
 | [T11](#t11---typing-presence-history) | Week 4 | Typing, presence, history | Not started |  |
 | [T12](#t12---analytics-dashboard) | Week 5 | Analytics dashboard | Not started |  |
 | [T13](#t13---stripe-billing-and-plan-limits) | Week 5 | Stripe billing and plan limits | Not started |  |
@@ -45,7 +45,7 @@ Last update: 2026-10-19
 | Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 3/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 2/2 |
-| Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 1/3 |
+| Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 2/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
 | Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 0/4 |
 <!-- /AUTO:MILESTONES -->
@@ -341,26 +341,26 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T10 - Handoff logic
 
-`Not started` · est. 6 h · depends on: T09
+`Done` · est. 6 h · depends on: T09 · completed 2026-10-19
 
 **Goal:** Low-confidence or explicit requests move the chat to a human, and back to AI when done.
 
 **Subtasks**
 
-- [ ] Conversation state machine: ai -> waiting -> human -> ai | closed, all transitions in one service
-- [ ] Triggers: confidence below tenant threshold (default 0.55), 'Talk to a human' button, intent phrases, 2 low-confidence answers in a row
-- [ ] Waiting state: customer sees 'Connecting you to an agent', inbox highlights and notifies
-- [ ] While status = human the AI pipeline is skipped for that conversation
-- [ ] Agent actions: hand back to AI, close conversation
-- [ ] No agent online: collect the customer's email and save it as an offline ticket
-- [ ] Tenant setting: confidence threshold slider
-- [ ] Unit tests for every valid and invalid transition
+- [x] Conversation state machine ai -> waiting -> human -> ai | closed as data in packages/shared; all transitions in HandoffService with status-guarded updates
+- [x] Triggers: confidence below tenant threshold flags the chat, 2 low-confidence answers in a row or 'talk to a person' (button and intent phrases) -> waiting
+- [x] Waiting state: customer sees 'Connecting you to a person', inbox shows the reason under Needs agent
+- [x] While status = waiting or human the AI pipeline is skipped for that conversation (test)
+- [x] Agent actions: hand back to AI, close conversation (widget starts fresh after close)
+- [x] No agent online: offline reply + email form in the widget; email saved on the conversation and shown in the inbox
+- [x] Tenant setting: confidence threshold slider (20-90%)
+- [x] Unit tests for every valid and invalid transition; integration tests for every trigger and action
 
 **Acceptance criteria**
 
-- [ ] A low-confidence question shows under 'Needs agent' within 1 second
-- [ ] The AI never replies while status = human (test)
-- [ ] Handing back to AI resumes AI answers
+- [x] A low-confidence question shows under 'Needs agent' within 1 second
+- [x] The AI never replies while status = human (test)
+- [x] Handing back to AI resumes AI answers
 
 **Deliverables:** Handoff state machine, Threshold setting, Offline ticket fallback  
 **Interview talking point:** Handoff is an explicit state machine, so every transition is validated and testable instead of scattered if-statements.

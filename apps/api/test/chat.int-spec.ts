@@ -170,7 +170,8 @@ describe('RAG chat API (T07)', () => {
   it('flags a request for a person without calling the model', async () => {
     const res = await ask('Can I talk to a real person?');
     expect(res.done.needsHuman).toBe(true);
-    expect(res.done.content).toMatch(/talk to a person/);
+    expect(res.done.content).toMatch(/connecting you|isn't online/);
+    expect(res.done.conversationStatus).toBe('waiting');
   });
 
   it('masks personal data before it reaches the model, but keeps it for the agent', async () => {

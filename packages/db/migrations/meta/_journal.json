@@ -43,6 +43,13 @@
       "when": 1792260690588,
       "tag": "0005_productive_maria_hill",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792399166061,
+      "tag": "0006_yellow_wild_pack",
+      "breakpoints": true
     }
   ]
 }

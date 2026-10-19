@@ -23,13 +23,17 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { Auth, Roles } from '../auth/decorators';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { HandoffService } from '../handoff/handoff.service';
 import { InboxService } from './inbox.service';
 
 /** Agent inbox (every team member). Live updates arrive on the /agent socket namespace. */
 @Controller('conversations')
 @Roles('agent')
 export class InboxController {
-  constructor(private readonly inbox: InboxService) {}
+  constructor(
+    private readonly inbox: InboxService,
+    private readonly handoff: HandoffService,
+  ) {}
 
   @Get()
   list(@Auth() auth: AuthContext, @Query('tab') tab = 'needs_agent'): Promise<InboxList> {
@@ -53,7 +57,7 @@ export class InboxController {
     @Auth() auth: AuthContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ConversationSummary> {
-    return this.inbox.claim(auth.tenantId, auth.userId, id);
+    return this.handoff.claim(auth.tenantId, auth.userId, id);
   }
 
   @Post(':id/messages')
@@ -62,6 +66,25 @@ export class InboxController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(agentReplySchema)) body: AgentReply,
   ): Promise<AgentMessage> {
-    return this.inbox.reply(auth.tenantId, auth.userId, id, body.message);
+    return this.handoff.reply(auth.tenantId, auth.userId, id, body.message);
+  }
+
+  /** Give the conversation back to the AI assistant. */
+  @Post(':id/hand-back')
+  @HttpCode(HttpStatus.OK)
+  handBack(
+    @Auth() auth: AuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ConversationSummary> {
+    return this.handoff.handBack(auth.tenantId, auth.userId, id);
+  }
+
+  @Post(':id/close')
+  @HttpCode(HttpStatus.OK)
+  close(
+    @Auth() auth: AuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ConversationSummary> {
+    return this.handoff.close(auth.tenantId, auth.userId, id);
   }
 }

@@ -98,6 +98,8 @@ export const updateTenantSchema = z
     name: companyNameSchema.optional(),
     branding: brandingSchema.optional(),
     allowedDomains: allowedDomainsSchema.optional(),
+    /** Answers below this confidence count as "needs a person" (T10). */
+    handoffThreshold: z.number().min(0.2).max(0.9).optional(),
     onboardingCompleted: z.literal(true).optional(),
   })
   .strict();

@@ -100,9 +100,21 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     conversationId: string,
     status: ConversationStatus,
     agentName: string | null,
+    agentsOnline?: boolean,
   ): void {
     this.widget
       ?.to(rooms.conversation(conversationId))
-      .emit('conversation:status', { conversationId, status, agentName });
+      .emit('conversation:status', { conversationId, status, agentName, agentsOnline });
+  }
+
+  /** Dashboards connected for this tenant, on every API instance (Redis adapter). */
+  async agentsOnline(tenantId: string): Promise<number> {
+    if (!this.agent) return 0;
+    try {
+      return (await this.agent.in(rooms.tenant(tenantId)).fetchSockets()).length;
+    } catch (error) {
+      this.logger.warn(`Could not count online agents: ${(error as Error).message}`);
+      return 0;
+    }
   }
 }

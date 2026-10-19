@@ -29,11 +29,16 @@ import {
   type ChatDone,
   type ChatSource,
   type HistoryMessage,
+  LOW_CONFIDENCE_LIMIT,
   redactPii,
   WIDGET_LIMITS,
 } from '@supportpilot/shared';
 import { DRIZZLE } from '../database/database.module';
+import { HANDOFF_TEXT, HandoffService } from '../handoff/handoff.service';
 import { InboxService } from '../inbox/inbox.service';
+
+/** Dashboard playground conversations never go to the inbox or change status. */
+const isPlayground = (c: ConversationRow) => c.visitorId.startsWith('playground:');
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
 export const EMBEDDING_PROVIDER = Symbol('EMBEDDING_PROVIDER');
@@ -41,8 +46,6 @@ export const EMBEDDING_PROVIDER = Symbol('EMBEDDING_PROVIDER');
 export const CHAT_TEXT = {
   notFound:
     "I'm sorry, I couldn't find that in our help articles. Would you like me to connect you with a person from our team?",
-  handoff:
-    "Of course. I'm letting our team know you'd like to talk to a person; someone will join this chat as soon as possible.",
   error:
     "Sorry, I'm having trouble answering right now. Would you like me to connect you with a person from our team?",
 } as const;
@@ -75,6 +78,7 @@ export class ChatService {
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
     private readonly inbox: InboxService,
+    private readonly handoff: HandoffService,
   ) {}
 
   /**
@@ -139,14 +143,22 @@ export class ChatService {
     }
 
     if (asksForHuman(message)) {
-      sink.delta(CHAT_TEXT.handoff);
-      return this.finish(tenant, conversation, started, {
-        content: CHAT_TEXT.handoff,
+      // Real conversations go to "waiting" (playground tests only show the reply).
+      const handoff = isPlayground(conversation)
+        ? null
+        : await this.handoff.requestHuman(tenant.id, conversation, 'customer_request');
+      const text =
+        handoff && !handoff.agentsOnline ? HANDOFF_TEXT.offline : HANDOFF_TEXT.connecting;
+      sink.delta(text);
+      const done = await this.finish(tenant, conversation, started, {
+        content: text,
         sources: [],
         confidence: 0,
         needsHuman: true,
         metadata: { reason: 'customer_asked_for_human' },
+        resetStreak: true,
       });
+      return { ...done, conversationStatus: handoff?.status ?? done.conversationStatus };
     }
 
     // Retrieval: the masked question, this tenant only, same embedding model only.
@@ -168,13 +180,17 @@ export class ChatService {
 
     if (hits.length === 0) {
       sink.delta(CHAT_TEXT.notFound);
-      return this.finish(tenant, conversation, started, {
-        content: CHAT_TEXT.notFound,
-        sources: [],
-        confidence: 0,
-        needsHuman: true,
-        metadata: { reason: 'no_relevant_passages', retrieval },
-      });
+      return this.afterAnswer(
+        tenant,
+        conversation,
+        await this.finish(tenant, conversation, started, {
+          content: CHAT_TEXT.notFound,
+          sources: [],
+          confidence: 0,
+          needsHuman: true,
+          metadata: { reason: 'no_relevant_passages', retrieval },
+        }),
+      );
     }
 
     const prompt = buildRagMessages({
@@ -222,13 +238,17 @@ export class ChatService {
 
     if (failure && !signal?.aborted && !content) {
       sink.delta(CHAT_TEXT.error);
-      return this.finish(tenant, conversation, started, {
-        content: CHAT_TEXT.error,
-        sources: [],
-        confidence: 0,
-        needsHuman: true,
-        metadata: { reason: 'llm_error', error: failure.slice(0, 300), retrieval },
-      });
+      return this.afterAnswer(
+        tenant,
+        conversation,
+        await this.finish(tenant, conversation, started, {
+          content: CHAT_TEXT.error,
+          sources: [],
+          confidence: 0,
+          needsHuman: true,
+          metadata: { reason: 'llm_error', error: failure.slice(0, 300), retrieval },
+        }),
+      );
     }
 
     // Sources = passages the answer cites (inline [n] or in the metadata), if they exist.
@@ -258,11 +278,12 @@ export class ChatService {
       embeddingModel: this.embeddings.model,
       meta,
     });
-    return this.finish(tenant, conversation, started, {
+    const needsHuman = confidence < tenant.handoffThreshold;
+    const done = await this.finish(tenant, conversation, started, {
       content: content || CHAT_TEXT.notFound,
       sources,
       confidence,
-      needsHuman: confidence < tenant.handoffThreshold,
+      needsHuman,
       metadata: {
         model: this.llm.model,
         firstTokenMs,
@@ -273,6 +294,19 @@ export class ChatService {
         ...(pii.found.length ? { piiMasked: pii.found } : {}),
       },
     });
+    return this.afterAnswer(tenant, conversation, done);
+  }
+
+  /** Low confidence twice in a row: hand the conversation to a person (ai -> waiting). */
+  private async afterAnswer(
+    tenant: Tenant,
+    conversation: ConversationRow,
+    done: ChatDone,
+  ): Promise<ChatDone> {
+    const streak = done.needsHuman ? conversation.lowConfidenceStreak + 1 : 0;
+    if (streak < LOW_CONFIDENCE_LIMIT || isPlayground(conversation)) return done;
+    const handoff = await this.handoff.requestHuman(tenant.id, conversation, 'low_confidence');
+    return { ...done, conversationStatus: handoff.status };
   }
 
   /** Previous messages (oldest first), the conversation memory given to the model. */
@@ -315,6 +349,8 @@ export class ChatService {
       confidence: number;
       needsHuman: boolean;
       metadata: Record<string, unknown>;
+      /** A handoff starts now, so the low-confidence streak starts over. */
+      resetStreak?: boolean;
     },
   ): Promise<ChatDone> {
     const latencyMs = Date.now() - started;
@@ -332,7 +368,8 @@ export class ChatService {
       })
       .returning();
     await this.touch(conversation.id, {
-      lowConfidenceStreak: answer.needsHuman ? conversation.lowConfidenceStreak + 1 : 0,
+      lowConfidenceStreak:
+        answer.needsHuman && !answer.resetStreak ? conversation.lowConfidenceStreak + 1 : 0,
     });
     await this.notifyInbox(tenant.id, saved!);
     await this.db.insert(usageEvents).values({

@@ -85,6 +85,9 @@ export function App({ publicKey, apiUrl }: AppProps) {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
   const [unread, setUnread] = useState(false);
+  const [askEmail, setAskEmail] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
   const openRef = useRef(false);
   const socket = useRef<WidgetSocket | null>(null);
   const pendingId = useRef<string | null>(null);
@@ -171,10 +174,21 @@ export function App({ publicKey, apiUrl }: AppProps) {
       );
       if (!openRef.current) setUnread(true);
     });
-    s.on('conversation:status', ({ conversationId, status, agentName }) => {
+    s.on('conversation:status', ({ conversationId, status, agentName, agentsOnline }) => {
       if (conversationId !== load(conversationKey)) return;
       if (status === 'human') {
+        setAskEmail(false);
         notice(`${agentName ?? 'A team member'} from our team joined the chat.`);
+      } else if (status === 'waiting') {
+        if (agentsOnline === false) setAskEmail(true);
+        else notice('Connecting you to a person from our team...');
+      } else if (status === 'ai') {
+        setAskEmail(false);
+        notice("You're chatting with our AI assistant again.");
+      } else if (status === 'closed') {
+        setAskEmail(false);
+        save(conversationKey, null); // the next question starts a new conversation
+        notice('This conversation was closed. Ask a new question any time.');
       }
     });
     s.on('message:error', ({ message }) => {
@@ -285,6 +299,46 @@ export function App({ publicKey, apiUrl }: AppProps) {
                 )}
               </div>
             ))}
+            {askEmail && (
+              <form
+                class="sp-email"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const conversationId = load(conversationKey);
+                  if (!conversationId || !socket.current) return;
+                  socket.current.emit(
+                    'ticket:email',
+                    { conversationId, email: email.trim() },
+                    (result) => {
+                      if (!result.ok) {
+                        setEmailError(result.message);
+                        return;
+                      }
+                      setAskEmail(false);
+                      setEmailError(null);
+                      notice(`Thanks! We'll reply to ${email.trim()} as soon as possible.`);
+                    },
+                  );
+                }}
+              >
+                <label for="sp-email">Leave your email and we'll get back to you:</label>
+                <div class="sp-email-row">
+                  <input
+                    id="sp-email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
+                  />
+                  <button type="submit" class="sp-send">
+                    Send
+                  </button>
+                </div>
+                {emailError && <p class="sp-error">{emailError}</p>}
+              </form>
+            )}
             <div ref={listEnd} />
           </div>
           <form

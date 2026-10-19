@@ -18,8 +18,10 @@ import {
   widgetAuthSchema,
   widgetHistorySchema,
   widgetSendSchema,
+  offlineEmailSchema,
 } from '@supportpilot/shared';
 import type { Namespace, Socket } from 'socket.io';
+import { HandoffService } from '../handoff/handoff.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { WidgetService } from '../widget/widget.service';
 import { ChatService } from './chat.service';
@@ -67,6 +69,7 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
     private readonly chat: ChatService,
     private readonly widget: WidgetService,
     private readonly realtime: RealtimeService,
+    private readonly handoff: HandoffService,
   ) {}
 
   /** Handshake check: the client gets connect_error with the reason if it is refused. */
@@ -160,6 +163,27 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
         socket.off('disconnect', onDisconnect);
       });
     return { ok: true, conversationId: conversation.id };
+  }
+
+  /** Offline ticket: the visitor leaves an email while no agent is online. */
+  @SubscribeMessage('ticket:email')
+  async ticketEmail(
+    @ConnectedSocket() socket: WidgetSocket,
+    @MessageBody() body: unknown,
+  ): Promise<ReturnType<typeof fail> | { ok: true }> {
+    const state = socket.data;
+    if (!state?.tenant) return fail('invalid', 'Not connected');
+    const parsed = offlineEmailSchema.safeParse(body);
+    if (!parsed.success) {
+      return fail('invalid', parsed.error.issues[0]?.message ?? 'Enter a valid email address');
+    }
+    const saved = await this.handoff.saveContactEmail(
+      state.tenant.id,
+      state.visitorId,
+      parsed.data.conversationId,
+      parsed.data.email,
+    );
+    return saved ? { ok: true } : fail('conversation_not_found', 'Conversation not found');
   }
 
   @SubscribeMessage('conversation:history')

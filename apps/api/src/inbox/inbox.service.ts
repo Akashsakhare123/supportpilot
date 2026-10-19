@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   and,
   asc,
@@ -49,6 +49,8 @@ interface SummaryRow extends Record<string, unknown> {
   assigned_agent_id: string | null;
   agent_name: string | null;
   low_confidence_streak: number;
+  handoff_reason: string | null;
+  contact_email: string | null;
   last_message_at: Date | string;
   created_at: Date | string;
   last_sender: MessageSender | null;
@@ -78,6 +80,8 @@ function toSummary(row: SummaryRow): ConversationSummary {
         : null,
     lastConfidence: row.last_confidence === null ? null : Number(row.last_confidence),
     lowConfidenceStreak: Number(row.low_confidence_streak),
+    handoffReason: row.handoff_reason,
+    contactEmail: row.contact_email,
     messageCount: Number(row.message_count),
     lastMessageAt: iso(row.last_message_at),
     createdAt: iso(row.created_at),
@@ -85,7 +89,8 @@ function toSummary(row: SummaryRow): ConversationSummary {
 }
 
 /**
- * The agent inbox: lists, conversation detail, exclusive claim and agent replies. Every query is
+ * The agent inbox: lists, conversation detail and storing messages (status changes live in
+ * HandoffService). Every query is
  * scoped by the caller's tenant id (taken from the verified token). After each change the
  * RealtimeService pushes the new state to dashboards and the visitor's widget.
  */
@@ -99,7 +104,7 @@ export class InboxService {
   private async summaries(tenantId: string, where: ReturnType<typeof sql>, limit: number) {
     const result = await this.db.execute<SummaryRow>(sql`
       select c.id, c.status, c.visitor_id, c.origin, c.assigned_agent_id, u.name as agent_name,
-        c.low_confidence_streak, c.last_message_at, c.created_at,
+        c.low_confidence_streak, c.handoff_reason, c.contact_email, c.last_message_at, c.created_at,
         lm.sender as last_sender, lm.content as last_content, lm.created_at as last_created_at,
         (select m2.confidence from messages m2
           where m2.conversation_id = c.id and m2.sender = 'ai'
@@ -179,71 +184,6 @@ export class InboxService {
       needsHuman: row.needsHuman,
       authorName,
     };
-  }
-
-  /**
-   * Take a conversation. Exclusive: one conditional UPDATE, so of two agents clicking at the same
-   * moment exactly one wins; the other gets 409 with the winner's name.
-   */
-  async claim(
-    tenantId: string,
-    userId: string,
-    conversationId: string,
-  ): Promise<ConversationSummary> {
-    const [claimed] = await this.db
-      .update(conversations)
-      .set({
-        status: 'human',
-        assignedAgentId: userId,
-        lowConfidenceStreak: 0,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(conversations.id, conversationId),
-          eq(conversations.tenantId, tenantId),
-          sql`${conversations.status} <> 'closed'`,
-          sql`(${conversations.assignedAgentId} is null or ${conversations.assignedAgentId} = ${userId})`,
-        ),
-      )
-      .returning({ id: conversations.id });
-
-    if (!claimed) {
-      const current = await this.summary(tenantId, conversationId);
-      if (!current) throw new NotFoundException('Conversation not found');
-      if (current.status === 'closed') throw new ConflictException('This conversation is closed');
-      throw new ConflictException(
-        `Already taken by ${current.assignedAgentName ?? 'another agent'}`,
-      );
-    }
-
-    const agent = await this.db.query.users.findFirst({
-      where: eq(users.id, userId),
-      columns: { name: true },
-    });
-    const agentName = agent?.name ?? 'An agent';
-    await this.addMessage(tenantId, conversationId, {
-      sender: 'system',
-      content: `${agentName} joined the conversation`,
-    });
-    this.realtime.visitorStatus(conversationId, 'human', agentName.split(' ')[0] ?? agentName);
-    return (await this.publish(tenantId, conversationId))!;
-  }
-
-  /** Agent reply: claims an unassigned conversation first; refused if another agent has it. */
-  async reply(
-    tenantId: string,
-    userId: string,
-    conversationId: string,
-    content: string,
-  ): Promise<AgentMessage> {
-    const current = await this.summary(tenantId, conversationId);
-    if (!current) throw new NotFoundException('Conversation not found');
-    if (current.status === 'closed') throw new ConflictException('This conversation is closed');
-    if (current.assignedAgentId !== userId || current.status !== 'human') {
-      await this.claim(tenantId, userId, conversationId);
-    }
-    return this.addMessage(tenantId, conversationId, { sender: 'agent', content, userId });
   }
 
   /** Store a message, then push it to dashboards (and to the widget unless it is internal). */

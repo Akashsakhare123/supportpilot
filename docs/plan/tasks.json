@@ -370,23 +370,23 @@
       "week": "Week 4",
       "title": "Handoff logic",
       "notes": "Confidence threshold, 'talk to human'",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-19",
+      "completed": "2026-10-19",
       "est_hours": 6,
       "depends": [
         "T09"
       ],
       "goal": "Low-confidence or explicit requests move the chat to a human, and back to AI when done.",
       "subtasks": [
-        "Conversation state machine: ai -> waiting -> human -> ai | closed, all transitions in one service",
-        "Triggers: confidence below tenant threshold (default 0.55), 'Talk to a human' button, intent phrases, 2 low-confidence answers in a row",
-        "Waiting state: customer sees 'Connecting you to an agent', inbox highlights and notifies",
-        "While status = human the AI pipeline is skipped for that conversation",
-        "Agent actions: hand back to AI, close conversation",
-        "No agent online: collect the customer's email and save it as an offline ticket",
-        "Tenant setting: confidence threshold slider",
-        "Unit tests for every valid and invalid transition"
+        "Conversation state machine ai -> waiting -> human -> ai | closed as data in packages/shared; all transitions in HandoffService with status-guarded updates",
+        "Triggers: confidence below tenant threshold flags the chat, 2 low-confidence answers in a row or 'talk to a person' (button and intent phrases) -> waiting",
+        "Waiting state: customer sees 'Connecting you to a person', inbox shows the reason under Needs agent",
+        "While status = waiting or human the AI pipeline is skipped for that conversation (test)",
+        "Agent actions: hand back to AI, close conversation (widget starts fresh after close)",
+        "No agent online: offline reply + email form in the widget; email saved on the conversation and shown in the inbox",
+        "Tenant setting: confidence threshold slider (20-90%)",
+        "Unit tests for every valid and invalid transition; integration tests for every trigger and action"
       ],
       "acceptance": [
         "A low-confidence question shows under 'Needs agent' within 1 second",

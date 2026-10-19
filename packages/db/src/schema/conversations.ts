@@ -36,6 +36,10 @@ export const conversations = pgTable(
     assignedAgentId: uuid('assigned_agent_id').references(() => users.id, { onDelete: 'set null' }),
     /** Consecutive low-confidence AI answers; two in a row trigger a handoff (T10). */
     lowConfidenceStreak: integer('low_confidence_streak').notNull().default(0),
+    /** Why it went to "waiting": customer_request | low_confidence (T10). */
+    handoffReason: text('handoff_reason'),
+    /** Left by the customer when no agent was online (offline ticket). */
+    contactEmail: text('contact_email'),
     /** Origin (website) the conversation started on, for the agent inbox. */
     origin: text('origin'),
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),

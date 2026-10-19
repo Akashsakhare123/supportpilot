@@ -161,7 +161,13 @@ describe('Ingestion worker on Postgres + Redis (T06)', () => {
     expect(row.status).toBe('failed');
     expect(row.error).toMatch(/No readable text/);
     // Failed on the first attempt: UnrecoverableError skips the remaining two.
-    const job = (await queue.getJobs(['failed'])).find((j) => j.data.documentId === id);
+    // The document row is marked failed just before BullMQ moves the job to its failed list,
+    // so wait for the job to get there.
+    let job: Awaited<ReturnType<typeof queue.getJobs>>[number] | undefined;
+    for (let i = 0; i < 50 && !job; i += 1) {
+      job = (await queue.getJobs(['failed'])).find((j) => j.data.documentId === id);
+      if (!job) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     expect(job?.failedReason).toMatch(/No readable text/);
     expect(job?.attemptsMade ?? 0).toBeLessThanOrEqual(1);
   });

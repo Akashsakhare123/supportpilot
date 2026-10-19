@@ -17,6 +17,15 @@ Newest entry first. One entry per completed task (see [WORKFLOW.md](WORKFLOW.md#
 
 <!-- NEW ENTRIES BELOW -->
 
+### 2026-10-19 · T10 Handoff logic
+
+- **Built:** conversation state machine (`ai -> waiting -> human -> ai | closed`) as data in `packages/shared/src/handoff.ts`; every status change goes through `HandoffService` with a guard on the current status, records a system message and is pushed live. Triggers: answers below the tenant threshold are flagged, two unsure answers in a row or "Talk to a person" move the chat to `waiting` (reason shown in red under Needs agent). The AI stays silent while `waiting` or `human`. Agent actions: Take conversation, **Hand back to AI**, **Close** (the widget starts a new chat after close). No agent online: offline reply + email form in the widget (`ticket:email`), saved on the conversation and shown in the inbox ("Email left"). Settings: hand-off threshold slider (20-90%). Migration 0006 adds `handoff_reason` and `contact_email`.
+- **Files:** `packages/shared/src/handoff.ts` (+ test), `apps/api/src/handoff/handoff.service.ts`, `apps/api/src/{chat,inbox,realtime,tenant}/*`, `apps/api/test/{handoff,chat}.int-spec.ts`, `apps/dashboard/app/app/{inbox,settings}/page.tsx`, `apps/widget/src/{App.tsx,styles.css}`, `packages/db/src/schema/conversations.ts`, `packages/db/migrations/0006_*` (generated)
+- **Verify:** `scripts\doctor.cmd` -> all steps pass (73 API integration tests incl. the new hand-off suite, 92 shared tests incl. 18 state-machine tests). Manually: the 10-step customer/agent walkthrough (two unsure answers -> waiting, AI silent, take + reply, hand back -> AI answers again, close, offline email, threshold slider) matched.
+- **Fix:** the T06 worker test "fails a document that has no text" was flaky: it read BullMQ's failed list a moment before the job landed there. It now waits for the job.
+- **Decisions:** D46-D48 in ARCHITECTURE.md.
+- **Next:** T11 Typing, presence, history.
+
 ### 2026-10-19 · T09 Agent inbox
 
 - **Built:** live agent inbox. REST commands (agent+): `GET /conversations?tab=` (list + counts for Needs agent / Mine / Other agents / AI-handled / Closed), `GET /conversations/:id` (history with AI sources, confidence, hand-off flag), `POST /conversations/:id/claim` (exclusive: one conditional UPDATE, the loser gets 409 "Already taken by ..."), `POST /conversations/:id/messages` (agent reply, claims first if unassigned). Socket.io `/agent` namespace with the access token in the handshake and the tenant room only; `RealtimeService` pushes `conversation:upsert` / `message:new` to dashboards and agent replies + "joined" status to the visitor's widget. `@socket.io/redis-adapter` spreads events across API instances, and worker document-status events now reach the Knowledge base page live. Dashboard Inbox page with tabs and counts, conversation view, Take conversation, reply box; it refetches after reconnects. Widget shows agent replies ("Team member"), a "joined the chat" notice and an unread dot.

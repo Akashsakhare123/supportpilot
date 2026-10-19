@@ -1,6 +1,6 @@
 'use client';
 
-import { roleAtLeast, type TenantBranding } from '@supportpilot/shared';
+import { HANDOFF_THRESHOLD, roleAtLeast, type TenantBranding } from '@supportpilot/shared';
 import { type ReactNode, useEffect, useState } from 'react';
 import { BrandingForm } from '@/components/tenant/branding-form';
 import { DomainsEditor } from '@/components/tenant/domains-editor';
@@ -42,6 +42,7 @@ export default function SettingsPage() {
   const [name, setName] = useState('');
   const [branding, setBranding] = useState<Required<TenantBranding> | null>(null);
   const [domains, setDomains] = useState<string[]>([]);
+  const [threshold, setThreshold] = useState<number>(HANDOFF_THRESHOLD.default);
   const [status, setStatus] = useState<Record<string, Status>>({});
   const [confirmRotate, setConfirmRotate] = useState(false);
 
@@ -50,6 +51,7 @@ export default function SettingsPage() {
       setName(settings.name);
       setBranding(settings.branding);
       setDomains(settings.allowedDomains);
+      setThreshold(settings.handoffThreshold);
     }
   }, [settings, branding]);
 
@@ -134,6 +136,37 @@ export default function SettingsPage() {
           Save domains
         </Button>
         {note('domains')}
+      </Section>
+
+      <Section
+        title="Hand-off to your team"
+        description="Answers below this confidence are flagged for a person; two in a row (or a customer asking for a person) move the chat to your inbox."
+      >
+        <div className="flex flex-wrap items-center gap-4">
+          <input
+            type="range"
+            aria-label="Confidence threshold"
+            min={HANDOFF_THRESHOLD.min}
+            max={HANDOFF_THRESHOLD.max}
+            step={0.05}
+            value={threshold}
+            onChange={(e) => setThreshold(Number(e.target.value))}
+            className="w-64 accent-brand"
+          />
+          <span className="w-14 text-sm font-semibold">{Math.round(threshold * 100)}%</span>
+          <Button
+            onClick={() =>
+              run('handoff', () => update({ handoffThreshold: threshold }), 'Threshold saved')
+            }
+          >
+            Save
+          </Button>
+        </div>
+        <p className="text-xs text-slate-500">
+          Lower = the AI answers more on its own. Higher = your team sees more conversations.
+          Default {Math.round(HANDOFF_THRESHOLD.default * 100)}%.
+        </p>
+        {note('handoff')}
       </Section>
 
       <Section
