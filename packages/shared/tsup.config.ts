@@ -3,7 +3,8 @@ import { defineConfig } from 'tsup';
 export default defineConfig((options) => ({
   // index: safe for browser + server (widget, dashboard, api, worker)
   // node:  server-only helpers (env parsing, .env loading)
-  entry: ['src/index.ts', 'src/node.ts'],
+  // typing: zod-free typing-indicator helper the widget can bundle
+  entry: ['src/index.ts', 'src/node.ts', 'src/typing.ts'],
   format: ['cjs', 'esm'],
   dts: true,
   sourcemap: true,

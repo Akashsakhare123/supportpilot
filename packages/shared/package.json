@@ -26,6 +26,16 @@
         "types": "./dist/node.d.ts",
         "default": "./dist/node.js"
       }
+    },
+    "./typing": {
+      "import": {
+        "types": "./dist/typing.d.mts",
+        "default": "./dist/typing.mjs"
+      },
+      "require": {
+        "types": "./dist/typing.d.ts",
+        "default": "./dist/typing.js"
+      }
     }
   },
   "files": [

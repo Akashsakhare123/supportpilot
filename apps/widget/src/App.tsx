@@ -1,5 +1,7 @@
-// Type-only imports from @supportpilot/shared keep zod out of the bundle.
+// Type-only imports from @supportpilot/shared keep zod out of the bundle; the typing helper comes
+// from the zod-free `@supportpilot/shared/typing` entry.
 import type { ChatSource, HistoryMessage, WidgetConfig } from '@supportpilot/shared';
+import { createTypingNotifier, TYPING, type TypingNotifier } from '@supportpilot/shared/typing';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { connectWidget, type WidgetSocket } from './connection';
 import { load, save, visitorIdFor } from './storage';
@@ -13,16 +15,21 @@ type Load = { state: 'loading' } | { state: 'ready'; config: WidgetConfig } | { 
 type Connection = 'idle' | 'connecting' | 'online' | 'reconnecting';
 
 interface Line {
+  /** Server message id, or a local id ("l1") until the server's id is known. */
   id: string;
   role: 'customer' | 'ai' | 'agent' | 'notice';
   text: string;
   sources?: ChatSource[];
   pending?: boolean;
+  createdAt?: string;
+  /** Customer message an agent has read (read receipt). */
+  seen?: boolean;
 }
 
 const HUMAN_REQUEST = "I'd like to talk to a person, please.";
 let counter = 0;
 const localId = () => `l${++counter}`;
+const isLocal = (id: string) => /^l\d+$/.test(id);
 
 function fromHistory(m: HistoryMessage): Line {
   return {
@@ -30,7 +37,35 @@ function fromHistory(m: HistoryMessage): Line {
     role: m.sender === 'customer' ? 'customer' : m.sender === 'agent' ? 'agent' : 'ai',
     text: m.content,
     sources: m.sources,
+    createdAt: m.createdAt,
   };
+}
+
+/**
+ * Add messages from the server without duplicates. A customer message the widget showed
+ * before the server stored it (local id) takes over the server id instead of appearing twice.
+ */
+function merge(lines: Line[], incoming: HistoryMessage[]): Line[] {
+  const next = [...lines];
+  for (const m of incoming) {
+    if (next.some((line) => line.id === m.id)) continue;
+    const local =
+      m.sender === 'customer' &&
+      next.findIndex((l) => l.role === 'customer' && isLocal(l.id) && l.text === m.content);
+    if (typeof local === 'number' && local >= 0) {
+      next[local] = { ...next[local]!, id: m.id, createdAt: m.createdAt };
+    } else next.push(fromHistory(m));
+  }
+  return next;
+}
+
+/** Latest message id the server knows, for "send me what I missed" after a reconnect. */
+function lastServerId(lines: Line[]): string | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!;
+    if (line.role !== 'notice' && !line.pending && !isLocal(line.id)) return line.id;
+  }
+  return null;
 }
 
 function ChatIcon() {
@@ -84,16 +119,25 @@ export function App({ publicKey, apiUrl }: AppProps) {
   const [connection, setConnection] = useState<Connection>('idle');
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
-  const [unread, setUnread] = useState(false);
+  const [unread, setUnread] = useState(0);
   const [askEmail, setAskEmail] = useState(false);
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [agentsOnline, setAgentsOnline] = useState<boolean | null>(null);
+  const [agentTyping, setAgentTyping] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const openRef = useRef(false);
+  const linesRef = useRef<Line[]>([]);
   const socket = useRef<WidgetSocket | null>(null);
   const pendingId = useRef<string | null>(null);
+  const typingNotifier = useRef<TypingNotifier | null>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepScroll = useRef(false);
   const listEnd = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const conversationKey = `sp_conversation_${publicKey}`;
+  linesRef.current = lines;
 
   useEffect(() => {
     fetch(`${apiUrl}/widget/config?key=${encodeURIComponent(publicKey)}`)
@@ -122,24 +166,77 @@ export function App({ publicKey, apiUrl }: AppProps) {
     setLines((all) => [...all, { id: localId(), role: 'notice', text }]);
   }, []);
 
-  /** Connect on first open (no sockets on pages where nobody uses the chat). */
+  /** Read receipt: the visitor has the chat open, so the agent can see "Seen". */
+  const markRead = useCallback(() => {
+    const conversationId = load(conversationKey);
+    const s = socket.current;
+    if (!openRef.current || !conversationId || !s?.connected) return;
+    s.emit('conversation:read', { conversationId });
+  }, [conversationKey]);
+
+  const showAgentTyping = useCallback((name: string | null) => {
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    setAgentTyping(name);
+    // A lost "stop" (closed tab) must not leave the dots forever.
+    if (name) typingTimer.current = setTimeout(() => setAgentTyping(null), TYPING.expireMs);
+  }, []);
+
+  /**
+   * Connect when the chat is first opened, or right away for a visitor with an ongoing
+   * conversation (so agent replies arrive with an unread badge). No socket on pages where nobody
+   * has used the chat.
+   */
+  const shouldConnect = open || (load_.state === 'ready' && load(conversationKey) !== null);
   useEffect(() => {
-    if (!open || socket.current) return;
+    if (!shouldConnect || socket.current) return;
     const s = connectWidget(apiUrl, publicKey, visitorIdFor(publicKey));
     socket.current = s;
     setConnection('connecting');
 
+    const restore = (conversationId: string) => {
+      const after = linesRef.current.length ? lastServerId(linesRef.current) : null;
+      s.emit(
+        'conversation:history',
+        after ? { conversationId, after, limit: 100 } : { conversationId },
+        (result) => {
+          if (!result.ok) {
+            if (result.code === 'conversation_not_found') save(conversationKey, null);
+            else if (after) setLines([]); // unknown cursor: start over with the latest page
+            return;
+          }
+          if (after && result.hasMore) {
+            // Missed too much while offline: reload the latest page instead.
+            setLines([]);
+            restore(conversationId);
+            return;
+          }
+          const readAt = result.agentReadAt;
+          setLines((all) =>
+            merge(after ? all : [], result.messages).map((line) =>
+              readAt && line.role === 'customer' && line.createdAt && line.createdAt <= readAt
+                ? { ...line, seen: true }
+                : line,
+            ),
+          );
+          if (!after) setHasMore(result.hasMore);
+          if (result.status === 'closed') {
+            save(conversationKey, null);
+            setAskEmail(false);
+          }
+          if (openRef.current) markRead();
+          else setUnread(result.unread);
+        },
+      );
+    };
+
     s.on('connect', () => {
       setConnection('online');
       const saved = load(conversationKey);
-      if (!saved) return;
-      s.emit('conversation:history', { conversationId: saved }, (result) => {
-        if (result.ok) setLines(result.messages.map(fromHistory));
-        else save(conversationKey, null); // gone or not ours: start fresh
-      });
+      if (saved) restore(saved);
     });
     s.on('disconnect', () => {
       setConnection('reconnecting');
+      showAgentTyping(null);
       if (pendingId.current) {
         update(pendingId.current, { pending: false, text: 'Connection lost. Please ask again.' });
         pendingId.current = null;
@@ -164,15 +261,32 @@ export function App({ publicKey, apiUrl }: AppProps) {
         setLines((all) => all.filter((line) => line.id !== id));
         return;
       }
-      update(id, { text: done.content, sources: done.sources, pending: false });
+      update(id, {
+        id: done.messageId ?? id,
+        text: done.content,
+        sources: done.sources,
+        pending: false,
+      });
     });
     // Agent replies (and other messages this widget did not stream itself).
     s.on('message:new', ({ conversationId, message }) => {
       if (conversationId !== load(conversationKey)) return;
+      setLines((all) => merge(all, [message]));
+      if (message.sender === 'agent') showAgentTyping(null);
+      if (openRef.current) markRead();
+      else setUnread((n) => n + 1);
+    });
+    s.on('typing', ({ conversationId, typing, name }) => {
+      if (conversationId !== load(conversationKey)) return;
+      showAgentTyping(typing ? (name ?? 'Our team') : null);
+    });
+    s.on('presence', ({ agentsOnline: online }) => setAgentsOnline(online));
+    // An agent read the conversation: everything the customer sent so far is seen.
+    s.on('conversation:read', ({ conversationId }) => {
+      if (conversationId !== load(conversationKey)) return;
       setLines((all) =>
-        all.some((line) => line.id === message.id) ? all : [...all, fromHistory(message)],
+        all.map((line) => (line.role === 'customer' ? { ...line, seen: true } : line)),
       );
-      if (!openRef.current) setUnread(true);
     });
     s.on('conversation:status', ({ conversationId, status, agentName, agentsOnline }) => {
       if (conversationId !== load(conversationKey)) return;
@@ -184,9 +298,11 @@ export function App({ publicKey, apiUrl }: AppProps) {
         else notice('Connecting you to a person from our team...');
       } else if (status === 'ai') {
         setAskEmail(false);
+        showAgentTyping(null);
         notice("You're chatting with our AI assistant again.");
       } else if (status === 'closed') {
         setAskEmail(false);
+        showAgentTyping(null);
         save(conversationKey, null); // the next question starts a new conversation
         notice('This conversation was closed. Ask a new question any time.');
       }
@@ -198,27 +314,70 @@ export function App({ publicKey, apiUrl }: AppProps) {
       } else notice(message);
       setBusy(false);
     });
-    return undefined;
-  }, [open, apiUrl, publicKey, conversationKey, update, notice]);
 
-  useEffect(() => () => void socket.current?.disconnect(), []);
+    typingNotifier.current = createTypingNotifier((typing) => {
+      const conversationId = load(conversationKey);
+      if (conversationId && s.connected) s.emit('typing', { conversationId, typing });
+    });
+    return undefined;
+  }, [
+    shouldConnect,
+    apiUrl,
+    publicKey,
+    conversationKey,
+    update,
+    notice,
+    markRead,
+    showAgentTyping,
+  ]);
+
+  /** "Load earlier messages": the page before the oldest message shown. */
+  function loadEarlier() {
+    const conversationId = load(conversationKey);
+    const oldest = lines.find((line) => line.role !== 'notice' && !isLocal(line.id));
+    const s = socket.current;
+    if (!conversationId || !oldest || !s || loadingMore) return;
+    setLoadingMore(true);
+    s.emit('conversation:history', { conversationId, before: oldest.id }, (result) => {
+      setLoadingMore(false);
+      if (!result.ok) return;
+      keepScroll.current = true;
+      setHasMore(result.hasMore);
+      setLines((all) => [...result.messages.map(fromHistory), ...all]);
+    });
+  }
+
+  useEffect(
+    () => () => {
+      typingNotifier.current?.dispose();
+      socket.current?.disconnect();
+    },
+    [],
+  );
 
   useEffect(() => {
+    // Loading older messages keeps the reader where they are instead of jumping to the end.
+    if (keepScroll.current) {
+      keepScroll.current = false;
+      return;
+    }
     listEnd.current?.scrollIntoView({ block: 'end' });
-  }, [lines, open]);
+  }, [lines, open, agentTyping]);
 
   useEffect(() => {
     openRef.current = open;
     if (open) {
-      setUnread(false);
+      setUnread(0);
+      markRead();
       input.current?.focus();
     }
-  }, [open]);
+  }, [open, markRead]);
 
   function send(text: string) {
     const message = text.trim();
     const s = socket.current;
     if (!message || busy || !s || connection !== 'online') return;
+    typingNotifier.current?.stop();
     const answerId = localId();
     pendingId.current = answerId;
     setBusy(true);
@@ -244,6 +403,7 @@ export function App({ publicKey, apiUrl }: AppProps) {
   if (load_.state !== 'ready') return null;
   const { branding, tenantName } = load_.config;
   const offline = connection === 'reconnecting' || connection === 'connecting';
+  const lastCustomer = [...lines].reverse().find((line) => line.role === 'customer');
 
   return (
     <div
@@ -259,7 +419,15 @@ export function App({ publicKey, apiUrl }: AppProps) {
         >
           <div class="sp-header">
             {branding.logoUrl && <img class="sp-logo" src={branding.logoUrl} alt="" />}
-            <span class="sp-title">{tenantName}</span>
+            <div class="sp-title">
+              <span>{tenantName}</span>
+              {agentsOnline !== null && (
+                <span class="sp-presence">
+                  <i class={agentsOnline ? 'sp-dot sp-dot-on' : 'sp-dot'} />
+                  {agentsOnline ? 'Our team is online' : 'AI assistant · team offline'}
+                </span>
+              )}
+            </div>
             <button
               class="sp-icon-button"
               type="button"
@@ -275,9 +443,15 @@ export function App({ publicKey, apiUrl }: AppProps) {
             </div>
           )}
           <div class="sp-messages" aria-live="polite">
-            <div class="sp-line sp-ai">
-              <p class="sp-bubble">{branding.greeting}</p>
-            </div>
+            {hasMore ? (
+              <button class="sp-more" type="button" disabled={loadingMore} onClick={loadEarlier}>
+                {loadingMore ? 'Loading...' : 'Load earlier messages'}
+              </button>
+            ) : (
+              <div class="sp-line sp-ai">
+                <p class="sp-bubble">{branding.greeting}</p>
+              </div>
+            )}
             {lines.map((line) => (
               <div key={line.id} class={`sp-line sp-${line.role}`}>
                 {line.role === 'notice' ? (
@@ -297,8 +471,21 @@ export function App({ publicKey, apiUrl }: AppProps) {
                     {line.sources && <Sources sources={line.sources} />}
                   </div>
                 )}
+                {line === lastCustomer && line.seen && <span class="sp-seen">Seen</span>}
               </div>
             ))}
+            {agentTyping && (
+              <div class="sp-line sp-agent-typing" role="status">
+                <div class="sp-bubble">
+                  <span class="sp-agent">{agentTyping} is typing</span>
+                  <span class="sp-typing" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                </div>
+              </div>
+            )}
             {askEmail && (
               <form
                 class="sp-email"
@@ -355,7 +542,12 @@ export function App({ publicKey, apiUrl }: AppProps) {
               maxLength={2000}
               placeholder="Type your question..."
               aria-label="Message"
-              onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
+              onInput={(e) => {
+                const value = (e.target as HTMLTextAreaElement).value;
+                setDraft(value);
+                if (value.trim()) typingNotifier.current?.keystroke();
+                else typingNotifier.current?.stop();
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -388,7 +580,11 @@ export function App({ publicKey, apiUrl }: AppProps) {
         onClick={() => setOpen(!open)}
       >
         {open ? <CloseIcon /> : <ChatIcon />}
-        {unread && !open && <span class="sp-unread" aria-label="New message" />}
+        {unread > 0 && !open && (
+          <span class="sp-unread" aria-label={`${unread} new message${unread === 1 ? '' : 's'}`}>
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
       </button>
     </div>
   );

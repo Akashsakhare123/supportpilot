@@ -9,16 +9,16 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 ## Progress
 
 <!-- AUTO:PROGRESS -->
-![progress](https://img.shields.io/badge/progress-10%2F17%20tasks-3B3F8C)
+![progress](https://img.shields.io/badge/progress-11%2F17%20tasks-3B3F8C)
 
-`[############--------] 59%` - currently on **T11 Typing, presence, history**
+`[#############-------] 65%` - currently on **T12 Analytics dashboard**
 
 | Milestone | Release | Progress |
 |---|---|---|
 | M1 Foundation | v0.1.0 | 3/3 (done) |
 | M2 Knowledge base | v0.2.0 | 3/3 (done) |
 | M3 AI chat MVP | v0.3.0 | 2/2 (done) |
-| M4 Human handoff | v0.4.0 | 2/3 (in progress) |
+| M4 Human handoff | v0.4.0 | 3/3 (done) |
 | M5 Business features | v0.5.0 | 0/2 (planned) |
 | M6 Production ready | v1.0.0 | 0/4 (planned) |
 

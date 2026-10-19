@@ -21,6 +21,7 @@ import {
   messages,
   type MessageRow,
   searchChunks,
+  sql,
   type Tenant,
   usageEvents,
 } from '@supportpilot/db';
@@ -28,11 +29,13 @@ import {
   CHAT_LIMITS,
   type ChatDone,
   type ChatSource,
-  type HistoryMessage,
   LOW_CONFIDENCE_LIMIT,
   redactPii,
   WIDGET_LIMITS,
+  type WidgetHistory,
+  type WidgetHistoryRequest,
 } from '@supportpilot/shared';
+import { loadMessagePage } from '../common/message-page';
 import { DRIZZLE } from '../database/database.module';
 import { HANDOFF_TEXT, HandoffService } from '../handoff/handoff.service';
 import { InboxService } from '../inbox/inbox.service';
@@ -390,39 +393,58 @@ export class ChatService {
   }
 
   /**
-   * A visitor's own conversation for the widget after a page reload (last 50 messages, oldest
-   * first). null when it does not exist or belongs to another tenant or visitor.
+   * A visitor's own conversation for the widget: the latest page after a reload, an older page
+   * (before) or the messages missed while disconnected (after); oldest first, system notes hidden.
+   * "not_found" when it does not exist or belongs to another tenant or visitor.
    */
   async visitorHistory(
     tenantId: string,
     visitorId: string,
-    conversationId: string,
-  ): Promise<HistoryMessage[] | null> {
+    request: WidgetHistoryRequest,
+  ): Promise<WidgetHistory | 'not_found' | 'unknown_cursor'> {
     const conversation = await this.db.query.conversations.findFirst({
       where: and(
-        eq(conversations.id, conversationId),
+        eq(conversations.id, request.conversationId),
         eq(conversations.tenantId, tenantId),
         eq(conversations.visitorId, visitorId),
       ),
-      columns: { id: true },
+      columns: { id: true, status: true, agentReadAt: true, visitorReadAt: true },
     });
-    if (!conversation) return null;
-    const rows = await this.db
-      .select({
-        id: messages.id,
-        sender: messages.sender,
-        content: messages.content,
-        sources: messages.sources,
-        createdAt: messages.createdAt,
-      })
+    if (!conversation) return 'not_found';
+    const page = await loadMessagePage(this.db, {
+      tenantId,
+      conversationId: conversation.id,
+      before: request.before,
+      after: request.after,
+      limit: request.limit ?? WIDGET_LIMITS.historyMessages,
+      hideSystem: true,
+    });
+    if (!page) return 'unknown_cursor';
+    const [unread] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
       .from(messages)
-      .where(eq(messages.conversationId, conversationId))
-      .orderBy(desc(messages.createdAt))
-      .limit(WIDGET_LIMITS.historyMessages);
-    return rows
-      .reverse()
-      .filter((m) => m.sender !== 'system')
-      .map((m) => ({ ...m, createdAt: m.createdAt.toISOString() }));
+      .where(
+        and(
+          eq(messages.conversationId, conversation.id),
+          eq(messages.sender, 'agent'),
+          conversation.visitorReadAt
+            ? sql`${messages.createdAt} > ${conversation.visitorReadAt}`
+            : undefined,
+        ),
+      );
+    return {
+      messages: page.rows.map(({ message: m }) => ({
+        id: m.id,
+        sender: m.sender,
+        content: m.content,
+        sources: m.sources,
+        createdAt: m.createdAt.toISOString(),
+      })),
+      hasMore: page.hasMore,
+      status: conversation.status,
+      unread: Number(unread?.count ?? 0),
+      agentReadAt: conversation.agentReadAt?.toISOString() ?? null,
+    };
   }
 
   /** Messages of a conversation, oldest first (playground history, tests). */

@@ -405,9 +405,9 @@
       "week": "Week 4",
       "title": "Typing, presence, history",
       "notes": "Socket.io events",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-19",
+      "completed": "2026-10-19",
       "est_hours": 5,
       "depends": [
         "T10"
@@ -415,11 +415,12 @@
       "goal": "The chat feels live: typing indicators, agent presence, and history that survives reloads.",
       "subtasks": [
         "Typed socket event contract in packages/shared (zod) used by api, dashboard and widget",
-        "Throttled typing:start / typing:stop in both directions",
-        "Agent presence (online / away / offline) in Redis with TTL heartbeats; widget shows 'agents online'",
-        "Paginated message history on widget reopen and in the agent view",
-        "Read receipts and unread counts",
-        "Reconnect + missed-message sync (fetch since lastMessageId)"
+        "Throttled typing indicators in both directions (start at once, repeat every 2 s, stop after 3 s idle)",
+        "Agent presence (online / away / offline) in Redis with TTL heartbeats; widget shows 'agents online'; away agents don't count for hand-offs",
+        "Paginated message history on widget reopen and in the agent view (Load earlier messages)",
+        "Read receipts ('Seen' on both sides) and unread counts (inbox badges, widget launcher)",
+        "Reconnect + missed-message sync (fetch after lastMessageId)",
+        "Permission tests for every new request and event (login, tenant, ownership, floods)"
       ],
       "acceptance": [
         "Typing shows on the other side within ~300 ms",

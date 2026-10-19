@@ -40,6 +40,10 @@ export const conversations = pgTable(
     handoffReason: text('handoff_reason'),
     /** Left by the customer when no agent was online (offline ticket). */
     contactEmail: text('contact_email'),
+    /** Last time an agent opened the conversation (unread counts in the inbox, T11). */
+    agentReadAt: timestamp('agent_read_at', { withTimezone: true }),
+    /** Last time the visitor had the chat open ("Seen" under agent replies, T11). */
+    visitorReadAt: timestamp('visitor_read_at', { withTimezone: true }),
     /** Origin (website) the conversation started on, for the agent inbox. */
     origin: text('origin'),
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),

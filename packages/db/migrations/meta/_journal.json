@@ -50,6 +50,13 @@
       "when": 1792399166061,
       "tag": "0006_yellow_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792403750541,
+      "tag": "0007_safe_nova",
+      "breakpoints": true
     }
   ]
 }

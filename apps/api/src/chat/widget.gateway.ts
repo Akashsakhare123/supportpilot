@@ -9,20 +9,25 @@ import {
 } from '@nestjs/websockets';
 import type { Tenant } from '@supportpilot/db';
 import {
-  type HistoryMessage,
+  conversationReadSchema,
+  offlineEmailSchema,
+  typingSchema,
   WIDGET_LIMITS,
   WIDGET_NAMESPACE,
   type WidgetClientEvents,
   type WidgetErrorCode,
+  type WidgetHistory,
   type WidgetServerEvents,
   widgetAuthSchema,
   widgetHistorySchema,
   widgetSendSchema,
-  offlineEmailSchema,
 } from '@supportpilot/shared';
 import type { Namespace, Socket } from 'socket.io';
 import { HandoffService } from '../handoff/handoff.service';
-import { RealtimeService } from '../realtime/realtime.service';
+import { InboxService } from '../inbox/inbox.service';
+import { PresenceService } from '../realtime/presence.service';
+import { withinRate } from '../realtime/rate-window';
+import { RealtimeService, rooms } from '../realtime/realtime.service';
 import { WidgetService } from '../widget/widget.service';
 import { ChatService } from './chat.service';
 
@@ -33,6 +38,8 @@ interface SocketState {
   busy: boolean;
   /** Timestamps of recent messages (sliding one-minute window). */
   sent: number[];
+  /** Timestamps of recent typing events (flood protection). */
+  typing: number[];
 }
 
 type WidgetSocket = Socket<
@@ -70,6 +77,8 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
     private readonly widget: WidgetService,
     private readonly realtime: RealtimeService,
     private readonly handoff: HandoffService,
+    private readonly inbox: InboxService,
+    private readonly presence: PresenceService,
   ) {}
 
   /** Handshake check: the client gets connect_error with the reason if it is refused. */
@@ -82,7 +91,14 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
       this.widget
         .resolveTenant(auth.data.key, origin)
         .then((tenant) => {
-          socket.data = { tenant, visitorId: auth.data.visitorId, origin, busy: false, sent: [] };
+          socket.data = {
+            tenant,
+            visitorId: auth.data.visitorId,
+            origin,
+            busy: false,
+            sent: [],
+            typing: [],
+          };
           next();
         })
         .catch((error: unknown) => {
@@ -92,10 +108,19 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
   }
 
   async handleConnection(socket: WidgetSocket): Promise<void> {
-    // Room used by T09/T10 to reach this visitor (e.g. agent replies).
-    if (socket.data?.tenant) {
-      await socket.join(`tenant:${socket.data.tenant.id}:visitor:${socket.data.visitorId}`);
-    }
+    if (!socket.data?.tenant) return;
+    const tenantId = socket.data.tenant.id;
+    // Visitor room (reach this visitor) and the tenant's widget room (presence changes).
+    await socket.join([
+      `tenant:${tenantId}:visitor:${socket.data.visitorId}`,
+      rooms.widgets(tenantId),
+    ]);
+    socket.emit('presence', { agentsOnline: (await this.presence.onlineCount(tenantId)) > 0 });
+  }
+
+  /** Only conversations this socket opened or loaded (both join the room after the owner check). */
+  private owns(socket: WidgetSocket, conversationId: string): boolean {
+    return socket.rooms.has(rooms.conversation(conversationId));
   }
 
   @SubscribeMessage('message:send')
@@ -133,7 +158,7 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
       }
       throw error;
     }
-    await socket.join(`conversation:${conversation.id}`);
+    await socket.join(rooms.conversation(conversation.id));
 
     // Answer in the background; the ack returns at once with the conversation id.
     const abort = new AbortController();
@@ -186,22 +211,42 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
     return saved ? { ok: true } : fail('conversation_not_found', 'Conversation not found');
   }
 
+  /**
+   * Restore a conversation: the latest page after a reload, older pages (before), or the messages
+   * missed while the connection was down (after). Joins the conversation room for live events.
+   */
   @SubscribeMessage('conversation:history')
   async history(
     @ConnectedSocket() socket: WidgetSocket,
     @MessageBody() body: unknown,
-  ): Promise<ReturnType<typeof fail> | { ok: true; messages: HistoryMessage[] }> {
+  ): Promise<ReturnType<typeof fail> | ({ ok: true } & WidgetHistory)> {
     const state = socket.data;
     if (!state?.tenant) return fail('invalid', 'Not connected');
     const parsed = widgetHistorySchema.safeParse(body);
-    if (!parsed.success) return fail('invalid', 'Invalid conversation id');
-    const messages = await this.chat.visitorHistory(
-      state.tenant.id,
-      state.visitorId,
-      parsed.data.conversationId,
-    );
-    if (!messages) return fail('conversation_not_found', 'Conversation not found');
-    await socket.join(`conversation:${parsed.data.conversationId}`);
-    return { ok: true, messages };
+    if (!parsed.success) return fail('invalid', 'Invalid history request');
+    const history = await this.chat.visitorHistory(state.tenant.id, state.visitorId, parsed.data);
+    if (history === 'not_found') return fail('conversation_not_found', 'Conversation not found');
+    if (history === 'unknown_cursor') return fail('invalid', 'Unknown message id');
+    await socket.join(rooms.conversation(parsed.data.conversationId));
+    return { ok: true, ...history };
+  }
+
+  /** The customer is typing: relayed to the tenant's agents (no ack, flood-limited). */
+  @SubscribeMessage('typing')
+  typing(@ConnectedSocket() socket: WidgetSocket, @MessageBody() body: unknown): void {
+    const state = socket.data;
+    const parsed = typingSchema.safeParse(body);
+    if (!state?.tenant || !parsed.success || !this.owns(socket, parsed.data.conversationId)) return;
+    if (!withinRate(state.typing, WIDGET_LIMITS.typingPer10s, 10_000)) return;
+    this.realtime.customerTyping(state.tenant.id, parsed.data.conversationId, parsed.data.typing);
+  }
+
+  /** The visitor has the chat open and saw the latest messages (read receipt for agents). */
+  @SubscribeMessage('conversation:read')
+  async read(@ConnectedSocket() socket: WidgetSocket, @MessageBody() body: unknown): Promise<void> {
+    const state = socket.data;
+    const parsed = conversationReadSchema.safeParse(body);
+    if (!state?.tenant || !parsed.success || !this.owns(socket, parsed.data.conversationId)) return;
+    await this.inbox.markVisitorRead(state.tenant.id, state.visitorId, parsed.data.conversationId);
   }
 }

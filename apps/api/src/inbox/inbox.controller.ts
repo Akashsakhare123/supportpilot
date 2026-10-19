@@ -19,6 +19,9 @@ import {
   type InboxList,
   type InboxTab,
   inboxTabs,
+  type MessagePage,
+  type MessagePageQuery,
+  messagePageQuerySchema,
 } from '@supportpilot/shared';
 import type { AuthContext } from '../auth/auth.types';
 import { Auth, Roles } from '../auth/decorators';
@@ -49,6 +52,26 @@ export class InboxController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ConversationDetail> {
     return this.inbox.detail(auth.tenantId, id);
+  }
+
+  /** Older messages (?before=<messageId>) or missed ones after a reconnect (?after=<messageId>). */
+  @Get(':id/messages')
+  messages(
+    @Auth() auth: AuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodValidationPipe(messagePageQuerySchema)) query: MessagePageQuery,
+  ): Promise<MessagePage<AgentMessage>> {
+    return this.inbox.messagePage(auth.tenantId, id, query);
+  }
+
+  /** The agent has seen the conversation: clears unread, sends a read receipt to the widget. */
+  @Post(':id/read')
+  @HttpCode(HttpStatus.OK)
+  read(
+    @Auth() auth: AuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ConversationSummary> {
+    return this.inbox.markAgentRead(auth.tenantId, id);
   }
 
   @Post(':id/claim')

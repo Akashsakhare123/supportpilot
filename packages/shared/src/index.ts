@@ -8,3 +8,4 @@ export * from './chat';
 export * from './pii';
 export * from './realtime';
 export * from './handoff';
+export * from './typing';

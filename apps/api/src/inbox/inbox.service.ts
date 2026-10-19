@@ -1,7 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   and,
-  asc,
   conversations,
   type Database,
   eq,
@@ -18,8 +17,11 @@ import type {
   HistoryMessage,
   InboxList,
   InboxTab,
+  MessagePage,
+  MessagePageQuery,
   MessageSender,
 } from '@supportpilot/shared';
+import { loadMessagePage } from '../common/message-page';
 import { DRIZZLE } from '../database/database.module';
 import { RealtimeService } from '../realtime/realtime.service';
 
@@ -58,6 +60,8 @@ interface SummaryRow extends Record<string, unknown> {
   last_created_at: Date | string | null;
   last_confidence: number | null;
   message_count: number;
+  unread_count: number;
+  visitor_read_at: Date | string | null;
 }
 
 const iso = (value: Date | string) => new Date(value).toISOString();
@@ -83,6 +87,8 @@ function toSummary(row: SummaryRow): ConversationSummary {
     handoffReason: row.handoff_reason,
     contactEmail: row.contact_email,
     messageCount: Number(row.message_count),
+    unreadCount: Number(row.unread_count),
+    visitorReadAt: row.visitor_read_at ? iso(row.visitor_read_at) : null,
     lastMessageAt: iso(row.last_message_at),
     createdAt: iso(row.created_at),
   };
@@ -109,7 +115,14 @@ export class InboxService {
         (select m2.confidence from messages m2
           where m2.conversation_id = c.id and m2.sender = 'ai'
           order by m2.created_at desc limit 1) as last_confidence,
-        (select count(*)::int from messages m3 where m3.conversation_id = c.id) as message_count
+        (select count(*)::int from messages m3 where m3.conversation_id = c.id) as message_count,
+        -- Unread only matters while a person is needed; AI-handled chats are not a to-do.
+        case when c.status in ('waiting', 'human') then
+          (select count(*)::int from messages m4
+            where m4.conversation_id = c.id and m4.sender = 'customer'
+              and m4.created_at > coalesce(c.agent_read_at, '-infinity'::timestamptz))
+        else 0 end as unread_count,
+        c.visitor_read_at
       from conversations c
       left join users u on u.id = c.assigned_agent_id
       left join lateral (
@@ -157,20 +170,77 @@ export class InboxService {
     return row ?? null;
   }
 
+  /** The conversation with its latest page of messages (older pages via messagePage). */
   async detail(tenantId: string, conversationId: string): Promise<ConversationDetail> {
     const conversation = await this.summary(tenantId, conversationId);
     if (!conversation) throw new NotFoundException('Conversation not found');
-    const rows = await this.db
-      .select({ message: messages, authorName: users.name })
-      .from(messages)
-      .leftJoin(users, eq(users.id, messages.userId))
-      .where(and(eq(messages.tenantId, tenantId), eq(messages.conversationId, conversationId)))
-      .orderBy(asc(messages.createdAt))
-      .limit(500);
+    const page = await this.loadPage(tenantId, conversationId, {});
+    return { conversation, ...page };
+  }
+
+  /**
+   * Older messages (before) or the ones missed during a reconnect (after), oldest first. Another
+   * tenant's conversation is a 404, not an empty page.
+   */
+  async messagePage(
+    tenantId: string,
+    conversationId: string,
+    query: MessagePageQuery,
+  ): Promise<MessagePage<AgentMessage>> {
+    const owned = await this.db.query.conversations.findFirst({
+      where: and(eq(conversations.id, conversationId), eq(conversations.tenantId, tenantId)),
+      columns: { id: true },
+    });
+    if (!owned) throw new NotFoundException('Conversation not found');
+    return this.loadPage(tenantId, conversationId, query);
+  }
+
+  private async loadPage(
+    tenantId: string,
+    conversationId: string,
+    query: MessagePageQuery,
+  ): Promise<MessagePage<AgentMessage>> {
+    const page = await loadMessagePage(this.db, { tenantId, conversationId, ...query });
+    if (!page) throw new NotFoundException('Message not found in this conversation');
     return {
-      conversation,
-      messages: rows.map((r) => this.toAgentMessage(r.message, r.authorName)),
+      messages: page.rows.map((r) => this.toAgentMessage(r.message, r.authorName)),
+      hasMore: page.hasMore,
     };
+  }
+
+  /**
+   * An agent opened the conversation (or it is open while new messages arrive): clears its unread
+   * count for the team and sends a read receipt to the customer's widget.
+   */
+  async markAgentRead(tenantId: string, conversationId: string): Promise<ConversationSummary> {
+    const readAt = new Date();
+    const updated = await this.db
+      .update(conversations)
+      .set({ agentReadAt: readAt })
+      .where(and(eq(conversations.id, conversationId), eq(conversations.tenantId, tenantId)))
+      .returning({ id: conversations.id });
+    if (updated.length === 0) throw new NotFoundException('Conversation not found');
+    this.realtime.visitorReadReceipt(conversationId, readAt.toISOString());
+    const summary = await this.publish(tenantId, conversationId);
+    if (!summary) throw new NotFoundException('Conversation not found');
+    return summary;
+  }
+
+  /** The visitor has the chat open: agents see "Seen" under their replies. */
+  async markVisitorRead(tenantId: string, visitorId: string, conversationId: string) {
+    const updated = await this.db
+      .update(conversations)
+      .set({ visitorReadAt: new Date() })
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.tenantId, tenantId),
+          eq(conversations.visitorId, visitorId),
+        ),
+      )
+      .returning({ id: conversations.id });
+    if (updated.length > 0) await this.publish(tenantId, conversationId);
+    return updated.length > 0;
   }
 
   toAgentMessage(row: MessageRow, authorName: string | null = null): AgentMessage {

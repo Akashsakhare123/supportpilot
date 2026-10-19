@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[############--------] 59%`  **10 / 17 tasks done** (61 / 108 est. hours)  
+`[#############-------] 65%`  **11 / 17 tasks done** (66 / 108 est. hours)  
 Last update: 2026-10-19  
-**Current / next task:** T11 Typing, presence, history (Not started)
+**Current / next task:** T12 Analytics dashboard (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -28,7 +28,7 @@ Last update: 2026-10-19
 | [T08](#t08---embeddable-widget) | Week 3 | Embeddable widget | Done | 2026-10-18 |
 | [T09](#t09---agent-inbox) | Week 4 | Agent inbox | Done | 2026-10-19 |
 | [T10](#t10---handoff-logic) | Week 4 | Handoff logic | Done | 2026-10-19 |
-| [T11](#t11---typing-presence-history) | Week 4 | Typing, presence, history | Not started |  |
+| [T11](#t11---typing-presence-history) | Week 4 | Typing, presence, history | Done | 2026-10-19 |
 | [T12](#t12---analytics-dashboard) | Week 5 | Analytics dashboard | Not started |  |
 | [T13](#t13---stripe-billing-and-plan-limits) | Week 5 | Stripe billing and plan limits | Not started |  |
 | [T14](#t14---tests) | Week 6 | Tests | Not started |  |
@@ -45,7 +45,7 @@ Last update: 2026-10-19
 | Week 1 | Oct 19 - Oct 25 | M1 Foundation | v0.1.0 | Monorepo runs locally, users can sign up as a business and log in with roles. | 3/3 |
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 3/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 2/2 |
-| Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 2/3 |
+| Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 3/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
 | Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 0/4 |
 <!-- /AUTO:MILESTONES -->
@@ -367,24 +367,25 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T11 - Typing, presence, history
 
-`Not started` · est. 5 h · depends on: T10
+`Done` · est. 5 h · depends on: T10 · completed 2026-10-19
 
 **Goal:** The chat feels live: typing indicators, agent presence, and history that survives reloads.
 
 **Subtasks**
 
-- [ ] Typed socket event contract in packages/shared (zod) used by api, dashboard and widget
-- [ ] Throttled typing:start / typing:stop in both directions
-- [ ] Agent presence (online / away / offline) in Redis with TTL heartbeats; widget shows 'agents online'
-- [ ] Paginated message history on widget reopen and in the agent view
-- [ ] Read receipts and unread counts
-- [ ] Reconnect + missed-message sync (fetch since lastMessageId)
+- [x] Typed socket event contract in packages/shared (zod) used by api, dashboard and widget
+- [x] Throttled typing indicators in both directions (start at once, repeat every 2 s, stop after 3 s idle)
+- [x] Agent presence (online / away / offline) in Redis with TTL heartbeats; widget shows 'agents online'; away agents don't count for hand-offs
+- [x] Paginated message history on widget reopen and in the agent view (Load earlier messages)
+- [x] Read receipts ('Seen' on both sides) and unread counts (inbox badges, widget launcher)
+- [x] Reconnect + missed-message sync (fetch after lastMessageId)
+- [x] Permission tests for every new request and event (login, tenant, ownership, floods)
 
 **Acceptance criteria**
 
-- [ ] Typing shows on the other side within ~300 ms
-- [ ] Closing and reopening the widget restores the conversation
-- [ ] Agent presence flips to offline when the tab closes (TTL expiry)
+- [x] Typing shows on the other side within ~300 ms
+- [x] Closing and reopening the widget restores the conversation
+- [x] Agent presence flips to offline when the tab closes (TTL expiry)
 
 **Deliverables:** Shared event contract, Presence service, History pagination  
 **Interview talking point:** Presence uses Redis keys with TTL heartbeats, so crashed clients go offline automatically.

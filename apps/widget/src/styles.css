@@ -40,13 +40,20 @@
 }
 .sp-unread {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 10px;
   background: #e11d48;
   border: 2px solid #fff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 .sp-launcher:focus-visible,
 .sp-icon-button:focus-visible,
@@ -88,9 +95,31 @@
 }
 .sp-title {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sp-title > span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sp-presence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.9;
+}
+.sp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c3c7d4;
+}
+.sp-dot-on {
+  background: #4ade80;
 }
 .sp-logo {
   width: 24px;
@@ -132,6 +161,29 @@
 }
 .sp-customer {
   justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.sp-seen {
+  flex-basis: 100%;
+  margin-top: 2px;
+  text-align: right;
+  font-size: 11px;
+  color: #8a8fa6;
+}
+.sp-more {
+  all: unset;
+  align-self: center;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--sp-brand);
+  text-decoration: underline;
+}
+.sp-more:focus-visible {
+  outline: 2px solid var(--sp-brand);
+  outline-offset: 2px;
+}
+.sp-agent-typing .sp-bubble {
+  background: #e8f5ee;
 }
 .sp-bubble {
   margin: 0;

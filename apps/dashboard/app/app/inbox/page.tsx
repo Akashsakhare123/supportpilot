@@ -4,6 +4,7 @@ import {
   type AgentMessage,
   type ConversationDetail,
   type ConversationSummary,
+  createTypingNotifier,
   HANDOFF_REASON_LABELS,
   type HandoffReason,
   INBOX_TAB_LABELS,
@@ -11,6 +12,10 @@ import {
   type InboxTab,
   inboxTabFor,
   inboxTabs,
+  type MessagePage,
+  PRESENCE_LABELS,
+  TYPING,
+  type TypingNotifier,
 } from '@supportpilot/shared';
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
@@ -47,7 +52,18 @@ function confidenceStyle(value: number): string {
   return 'bg-rose-100 text-rose-800';
 }
 
-function MessageBubble({ message }: { message: AgentMessage }) {
+const PRESENCE_DOT = { online: 'bg-emerald-500', away: 'bg-amber-400', offline: 'bg-slate-300' };
+
+const isVisible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
+
+/** Add messages without duplicates, keeping the order by time. */
+function mergeMessages(current: AgentMessage[], incoming: AgentMessage[]): AgentMessage[] {
+  const known = new Set(current.map((m) => m.id));
+  const added = incoming.filter((m) => !known.has(m.id));
+  return added.length ? [...current, ...added] : current;
+}
+
+function MessageBubble({ message, seen }: { message: AgentMessage; seen?: boolean }) {
   if (message.sender === 'system') {
     return <p className="text-center text-xs text-slate-400">{message.content}</p>;
   }
@@ -72,6 +88,7 @@ function MessageBubble({ message }: { message: AgentMessage }) {
           {customer ? 'Customer' : mine ? (message.authorName ?? 'Agent') : 'AI assistant'}
         </p>
         {message.content}
+        {seen && <p className="mt-1 text-right text-[11px] text-white/80">Seen</p>}
         {message.sender === 'ai' && (
           <div className="mt-2 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600">
             {message.sources.map((s) => (
@@ -107,7 +124,7 @@ function MessageBubble({ message }: { message: AgentMessage }) {
 /** Live agent inbox: tabs with counts, conversation list, conversation view with reply box. */
 export default function InboxPage() {
   const { user, apiFetch } = useAuth();
-  const { connected } = useRealtime();
+  const { connected, socket, team } = useRealtime();
   const [tab, setTab] = useState<InboxTab>('needs_agent');
   const [list, setList] = useState<InboxList | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -115,6 +132,13 @@ export default function InboxPage() {
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  /** Who is typing, per conversation ("Customer" or an agent's first name). */
+  const [typingIn, setTypingIn] = useState<Record<string, string>>({});
+  const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const notifier = useRef<TypingNotifier | null>(null);
+  const readTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepScroll = useRef(false);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const userId = user?.id ?? '';
@@ -125,14 +149,70 @@ export default function InboxPage() {
     else setError(await readError(res));
   }, [apiFetch, tab]);
 
-  const loadDetail = useCallback(
-    async (id: string) => {
-      const res = await apiFetch(`/conversations/${id}`);
-      if (res.ok) setDetail((await res.json()) as ConversationDetail);
-      else setError(await readError(res));
+  /** Read receipt + clear unread, only while the agent can actually see the conversation. */
+  const markRead = useCallback(
+    (id: string) => {
+      if (!isVisible()) return;
+      if (readTimer.current) clearTimeout(readTimer.current);
+      readTimer.current = setTimeout(() => {
+        void apiFetch(`/conversations/${id}/read`, { method: 'POST' });
+      }, 300);
     },
     [apiFetch],
   );
+
+  const loadDetail = useCallback(
+    async (id: string) => {
+      const res = await apiFetch(`/conversations/${id}`);
+      if (res.ok) {
+        setDetail((await res.json()) as ConversationDetail);
+        markRead(id);
+      } else setError(await readError(res));
+    },
+    [apiFetch, markRead],
+  );
+
+  /** After a reconnect: fetch only the messages missed since the last one shown. */
+  const syncDetail = useCallback(
+    async (id: string, lastId: string | undefined) => {
+      if (!lastId) return loadDetail(id);
+      const res = await apiFetch(`/conversations/${id}/messages?after=${lastId}&limit=100`);
+      const page = res.ok ? ((await res.json()) as MessagePage<AgentMessage>) : null;
+      // Unknown cursor or too much missed: reload the latest page instead.
+      if (!page || page.hasMore) return loadDetail(id);
+      setDetail((d) => (d ? { ...d, messages: mergeMessages(d.messages, page.messages) } : d));
+      const summary = await apiFetch(`/conversations/${id}`);
+      if (summary.ok) {
+        const fresh = (await summary.json()) as ConversationDetail;
+        setDetail((d) => (d ? { ...d, conversation: fresh.conversation } : d));
+      }
+    },
+    [apiFetch, loadDetail],
+  );
+
+  async function loadEarlier() {
+    const oldest = detail?.messages[0];
+    if (!selected || !oldest || loadingMore) return;
+    setLoadingMore(true);
+    const res = await apiFetch(`/conversations/${selected}/messages?before=${oldest.id}`);
+    if (res.ok) {
+      const page = (await res.json()) as MessagePage<AgentMessage>;
+      keepScroll.current = true;
+      setDetail((d) =>
+        d
+          ? {
+              ...d,
+              hasMore: page.hasMore,
+              messages: [
+                ...page.messages.filter((m) => !d.messages.some((x) => x.id === m.id)),
+                ...d.messages,
+              ],
+            }
+          : d,
+      );
+    } else setError(await readError(res));
+    setLoadingMore(false);
+  }
 
   useEffect(() => {
     void loadList();
@@ -157,25 +237,75 @@ export default function InboxPage() {
   });
 
   useAgentEvent('message:new', ({ conversationId, message }) => {
+    if (message.sender === 'customer' || message.sender === 'agent') {
+      setTyping(conversationId, null);
+    }
     if (conversationId !== selected) return;
-    setDetail((d) =>
-      d && !d.messages.some((m) => m.id === message.id)
-        ? { ...d, messages: [...d.messages, message] }
-        : d,
+    setDetail((d) => (d ? { ...d, messages: mergeMessages(d.messages, [message]) } : d));
+    if (message.sender === 'customer') markRead(conversationId);
+  });
+
+  function setTyping(conversationId: string, who: string | null) {
+    const timers = typingTimers.current;
+    if (timers[conversationId]) clearTimeout(timers[conversationId]);
+    delete timers[conversationId];
+    setTypingIn((all) => {
+      if (!who && !(conversationId in all)) return all;
+      const next = { ...all };
+      if (who) next[conversationId] = who;
+      else delete next[conversationId];
+      return next;
+    });
+    // A lost "stop" (closed tab) must not leave the indicator forever.
+    if (who)
+      timers[conversationId] = setTimeout(() => setTyping(conversationId, null), TYPING.expireMs);
+  }
+
+  useAgentEvent('typing', ({ conversationId, typing, from, name }) => {
+    setTyping(
+      conversationId,
+      typing ? (from === 'customer' ? 'Customer' : (name ?? 'An agent')) : null,
     );
   });
 
-  // After a reconnect, events may have been missed: refresh everything.
+  // Coming back to the tab counts as reading the open conversation.
+  useEffect(() => {
+    const onVisible = () => {
+      if (selected && isVisible()) markRead(selected);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [selected, markRead]);
+
+  // One typing notifier per open conversation; switching conversations sends "stopped typing".
+  useEffect(() => {
+    if (!selected || !socket) return;
+    const n = createTypingNotifier((typing) =>
+      socket.emit('typing', { conversationId: selected, typing }),
+    );
+    notifier.current = n;
+    return () => {
+      n.stop();
+      notifier.current = null;
+    };
+  }, [selected, socket]);
+
+  // After a reconnect, events may have been missed: reload the list and sync the open conversation.
   useEffect(() => {
     if (!connected) return;
     void loadList();
-    if (selected) void loadDetail(selected);
-    // Only when the connection state changes; selected / loaders are read at that moment.
+    if (selected) void syncDetail(selected, detail?.messages.at(-1)?.id);
+    // Only when the connection state changes; selected / detail / loaders are read at that moment.
   }, [connected]);
 
   useEffect(() => {
+    // Loading older messages keeps the agent where they are instead of jumping to the end.
+    if (keepScroll.current) {
+      keepScroll.current = false;
+      return;
+    }
     bottom.current?.scrollIntoView({ block: 'end' });
-  }, [detail?.messages.length]);
+  }, [detail?.messages.length, selected ? typingIn[selected] : undefined]);
 
   /** claim | hand-back | close */
   async function act(action: 'claim' | 'hand-back' | 'close') {
@@ -191,6 +321,7 @@ export default function InboxPage() {
   async function send(e: FormEvent) {
     e.preventDefault();
     if (!selected || !reply.trim()) return;
+    notifier.current?.stop();
     setBusy(true);
     setError(null);
     const res = await apiFetch(`/conversations/${selected}/messages`, {
@@ -200,11 +331,7 @@ export default function InboxPage() {
     if (res.ok) {
       const message = (await res.json()) as AgentMessage;
       setReply('');
-      setDetail((d) =>
-        d && !d.messages.some((m) => m.id === message.id)
-          ? { ...d, messages: [...d.messages, message] }
-          : d,
-      );
+      setDetail((d) => (d ? { ...d, messages: mergeMessages(d.messages, [message]) } : d));
     } else setError(await readError(res));
     setBusy(false);
   }
@@ -212,6 +339,12 @@ export default function InboxPage() {
   const conversation = detail?.conversation;
   const mineNow = conversation ? inboxTabFor(conversation, userId) === 'mine' : false;
   const takenByOther = conversation?.status === 'human' && !mineNow;
+  const lastAgentMessage = detail?.messages.findLast((m) => m.sender === 'agent');
+  const visitorSaw = (m: AgentMessage) =>
+    m === lastAgentMessage &&
+    Boolean(conversation?.visitorReadAt && conversation.visitorReadAt >= m.createdAt);
+  const typingHere = selected ? typingIn[selected] : undefined;
+  const onlineCount = team.filter((a) => a.state === 'online').length;
 
   return (
     <div className="space-y-4">
@@ -222,14 +355,33 @@ export default function InboxPage() {
             Conversations from your website widget, updated live.
           </p>
         </div>
-        <span
-          className={cn(
-            'rounded-full px-3 py-1 text-xs font-medium',
-            connected ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800',
-          )}
-        >
-          {connected ? 'Live' : 'Connecting...'}
-        </span>
+        <div className="flex items-center gap-3">
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+              {onlineCount} {onlineCount === 1 ? 'agent' : 'agents'} online
+            </summary>
+            <ul className="absolute right-0 z-10 mt-2 w-56 space-y-1 rounded-md border border-slate-200 bg-white p-3 text-sm shadow-lg">
+              {team.map((a) => (
+                <li key={a.userId} className="flex items-center gap-2">
+                  <span className={cn('h-2 w-2 rounded-full', PRESENCE_DOT[a.state])} />
+                  <span className="flex-1 truncate">
+                    {a.name}
+                    {a.userId === userId && ' (you)'}
+                  </span>
+                  <span className="text-xs text-slate-500">{PRESENCE_LABELS[a.state]}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+          <span
+            className={cn(
+              'rounded-full px-3 py-1 text-xs font-medium',
+              connected ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800',
+            )}
+          >
+            {connected ? 'Live' : 'Connecting...'}
+          </span>
+        </div>
       </div>
 
       {error && <Alert>{error}</Alert>}
@@ -281,13 +433,34 @@ export default function InboxPage() {
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-medium">{c.visitorLabel}</span>
-                    <span className="shrink-0 text-xs text-slate-400">
+                    <span
+                      className={cn(
+                        'truncate text-sm',
+                        c.unreadCount > 0 ? 'font-semibold' : 'font-medium',
+                      )}
+                    >
+                      {c.visitorLabel}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5 text-xs text-slate-400">
+                      {c.unreadCount > 0 && (
+                        <span
+                          className="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white"
+                          aria-label={`${c.unreadCount} unread`}
+                        >
+                          {c.unreadCount}
+                        </span>
+                      )}
                       {timeAgo(c.lastMessageAt)}
                     </span>
                   </div>
                   <p className="mt-0.5 truncate text-xs text-slate-500">
-                    {c.lastMessage ? c.lastMessage.content : 'No messages yet'}
+                    {typingIn[c.id] ? (
+                      <span className="text-brand italic">{typingIn[c.id]} is typing...</span>
+                    ) : c.lastMessage ? (
+                      c.lastMessage.content
+                    ) : (
+                      'No messages yet'
+                    )}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                     <span className={cn('rounded-full px-2 py-0.5', STATUS_STYLE[c.status])}>
@@ -378,9 +551,26 @@ export default function InboxPage() {
                 </div>
               </div>
               <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-5">
+                {detail.hasMore && (
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => void loadEarlier()}
+                      disabled={loadingMore}
+                      className="text-xs text-brand underline"
+                    >
+                      {loadingMore ? 'Loading...' : 'Load earlier messages'}
+                    </button>
+                  </div>
+                )}
                 {detail.messages.map((m) => (
-                  <MessageBubble key={m.id} message={m} />
+                  <MessageBubble key={m.id} message={m} seen={visitorSaw(m)} />
                 ))}
+                {typingHere && (
+                  <p className="text-xs text-slate-500 italic" role="status">
+                    {typingHere} is typing...
+                  </p>
+                )}
                 <div ref={bottom} />
               </div>
               {conversation.status === 'closed' ? (
@@ -395,7 +585,11 @@ export default function InboxPage() {
                 <form onSubmit={send} className="flex gap-2 border-t border-slate-200 p-4">
                   <textarea
                     value={reply}
-                    onChange={(e) => setReply(e.target.value)}
+                    onChange={(e) => {
+                      setReply(e.target.value);
+                      if (e.target.value.trim()) notifier.current?.keystroke();
+                      else notifier.current?.stop();
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();

@@ -192,6 +192,8 @@ erDiagram
     text visitor_id
     text status "ai, waiting, human, closed"
     uuid assigned_agent_id FK
+    timestamptz agent_read_at
+    timestamptz visitor_read_at
   }
   messages {
     uuid id PK
@@ -322,20 +324,33 @@ Providers come from env. `LLM_PROVIDER=mock` (default) is an offline extractive 
 - **Dashboard socket**: `/agent` handshake with the access token (`auth: { token }`). On "invalid or expired" the dashboard refreshes the token and reconnects. After any reconnect it refetches the list and the open conversation, so missed events cannot leave it stale.
 - **Scaling**: `RedisIoAdapter` (`@socket.io/redis-adapter`) makes room emits reach sockets on every API instance. The integration test runs **two API instances** in one process: the widget is on instance B and the dashboard on A. Worker document-status events are relayed with `namespace.local` (each instance receives the Redis message itself), so dashboards get each event once.
 
-## 7. Real-time events *(widget namespace since T08, agent namespace since T09; contract in `packages/shared/src/realtime.ts`)*
+## 6g. Typing, presence and history (T11)
+
+- **One contract**: every socket event and its payload type lives in `packages/shared/src/realtime.ts` (zod schemas for anything a client sends). The API validates with the schemas, and the dashboard and widget use the same types. The widget imports only types plus the zod-free `@supportpilot/shared/typing` entry, so zod never reaches client websites (bundle 23.8 KB gzipped).
+- **Typing**: `createTypingNotifier()` (shared) sends `typing: true` on the first keystroke, repeats it at most every 2 s, and sends `false` after 3 s idle or on send. Receivers hide the indicator after 6 s even if the stop is lost. The server relays immediately (well under 300 ms, tested across two instances). A widget can only send typing for a conversation it owns (its socket joined that room after the owner check), and an agent only for one in their tenant. Both sides are capped at 20 typing events per 10 s.
+- **Presence**: each dashboard tab writes `presence:{tenant}:tab:{user}:{tab}` = `online | away` with a 30 s TTL and refreshes it with a heartbeat every 10 s. A closed tab deletes its key at once, and a crashed one expires. Each API instance sweeps every 5 s. A `SET ... GET` swap of the last announced snapshot makes exactly one instance announce a change (`presence:update` to dashboards, and `presence` to widgets when "anyone online" flips). Agents choose Online or Away in the sidebar. Away agents do not count for hand-offs, so customers get the email form.
+- **History**: keyset pagination on `(created_at, id)`, with the cursor compared inside SQL so microsecond timestamps are not rounded. Pages are 50 messages (max 100). The widget's `conversation:history` takes `before` (Load earlier messages) or `after` (missed messages after a reconnect) and returns the status, the unread count and the agent read time. The agent view uses `GET /conversations/:id` (latest page + `hasMore`) and `GET /conversations/:id/messages?before|after=`. Another tenant's conversation is a 404.
+- **Read receipts and unread**: `POST /conversations/:id/read` (agent opens the conversation, or a customer message arrives while it is open and visible) sets `agent_read_at`, clears the unread count and sends `conversation:read` to the widget ("Seen" under the customer's last message). The widget emits `conversation:read` while the chat is open, which sets `visitor_read_at` ("Seen" under the agent's last reply). Unread counts only customer messages in `waiting` / `human` conversations. The widget launcher shows a count badge.
+- **Reconnects**: the widget asks for messages `after` the last one it has and merges them without duplicates. If too much was missed, it reloads the latest page. The dashboard does the same for the open conversation and refetches the list.
+
+## 7. Real-time events *(contract in `packages/shared/src/realtime.ts`)*
 
 | Namespace | Event | Direction | Payload |
 |---|---|---|---|
-| `/widget` | `message:send` | client -> server | text |
-| `/widget` | `message:delta` / `message:done` | server -> client | token / final message with sources + confidence |
-| `/widget` | `handoff:waiting` / `handoff:agent_joined` | server -> client | agent display name |
-| both | `typing:start` / `typing:stop` | both | conversationId |
-| `/agent` | `conversation:new` / `conversation:updated` | server -> client | conversation summary |
-| `/agent` | `conversation:needs_agent` | server -> client | conversation summary, reason |
-| `/agent` | `conversation:claim` / `conversation:handback` / `conversation:close` | client -> server | conversationId |
-| `/agent` | `presence:update` | both | agentId, online / away / offline |
+| `/widget` | `message:send` (ack) | client -> server | conversationId?, message |
+| `/widget` | `message:delta` / `message:done` / `message:error` | server -> client | text / final message with sources + confidence / error code |
+| `/widget` | `message:new` | server -> client | agent reply |
+| `/widget` | `conversation:status` | server -> client | status, agent name, agentsOnline |
+| `/widget` | `conversation:history` (ack) | client -> server | conversationId, before? / after?, limit? |
+| `/widget` | `ticket:email` (ack) | client -> server | conversationId, email |
+| both | `typing` | both | conversationId, typing (+ who, from the server) |
+| `/widget` | `conversation:read` | both | visitor read (client) / agent read receipt (server) |
+| `/widget` | `presence` | server -> client | agentsOnline |
+| `/agent` | `conversation:upsert` / `message:new` / `document:status` | server -> client | summary / message / document status |
+| `/agent` | `presence:set` / `presence:heartbeat` | client -> server | online or away / none |
+| `/agent` | `presence:update` | server -> client | every team member with online / away / offline |
 
-Rooms: `tenant:{id}` (all agents of a tenant) and `conversation:{id}` (customer + assigned agent).
+Agent commands that change data (claim, reply, hand back, close, read) are REST endpoints (D42). Rooms: `tenant:{id}` on `/agent` (all agents of a tenant), `conversation:{id}` on `/widget` (the visitor's sockets after the owner check) and `widgets:{tenantId}` on `/widget` (presence changes).
 
 ## 8. Security
 
@@ -429,6 +444,11 @@ never pull in `node:fs`.
 | D45 | One `RealtimeService` emits everything; list refetch on upsert (debounced) | Patch client state from each event | Fewer moving parts: events say "something changed" and REST stays the source of truth; refetch after reconnect covers missed events. |
 | D46 | State machine as data in the shared package + status-guarded UPDATEs | Ad-hoc status writes in services | One table to read, test and explain; the guard makes every transition race-safe. |
 | D47 | Offline tickets stay `waiting` with a contact email | Close them (as first planned) | A closed ticket would vanish from *Needs agent*, but someone still has to reply. |
-| D48 | "Agents online" = live dashboard sockets in the tenant room (`fetchSockets` across instances) | Separate presence store now | Accurate enough for the hand-off decision today; T11 adds presence with heartbeats and away state. |
+| D48 | "Agents online" = live dashboard sockets in the tenant room (`fetchSockets` across instances) | Separate presence store now | Accurate enough for the hand-off decision today; T11 adds presence with heartbeats and away state. *(Replaced by D49 in T11.)* |
+| D49 | Presence = one Redis key per tab with a 30 s TTL + 10 s heartbeats + a 5 s sweep | Socket counts, a DB column | Crashed tabs go offline by themselves, multiple tabs combine (online wins over away), and it works across instances. Replaces D48. |
+| D50 | Announce presence changes with a `SET ... GET` swap of the last snapshot | Pub/sub of every heartbeat | Steady heartbeats cost two Redis calls and no events; when several instances see the same change only one emits. |
+| D51 | Keyset pagination on `(created_at, id)` with the cursor compared in SQL | Offset paging, cursor as a JS Date | Stable when new messages arrive and exact with Postgres microseconds; the same helper serves the widget, the agent view and reconnect sync. |
+| D52 | Read state as two timestamps on the conversation (`agent_read_at`, `visitor_read_at`) | Per-message receipts, per-agent read state | Enough for "Seen" and unread counts with no extra table; per-agent state can come later if teams need it. |
+| D53 | A zod-free `@supportpilot/shared/typing` entry for the widget | Duplicate the throttle in the widget | One tested implementation for both clients without bundling zod (D39). |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

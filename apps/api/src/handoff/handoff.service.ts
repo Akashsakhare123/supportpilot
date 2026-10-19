@@ -19,6 +19,7 @@ import {
 } from '@supportpilot/shared';
 import { DRIZZLE } from '../database/database.module';
 import { InboxService } from '../inbox/inbox.service';
+import { PresenceService } from '../realtime/presence.service';
 import { RealtimeService } from '../realtime/realtime.service';
 
 export const HANDOFF_TEXT = {
@@ -40,6 +41,7 @@ export class HandoffService {
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly inbox: InboxService,
     private readonly realtime: RealtimeService,
+    private readonly presence: PresenceService,
   ) {}
 
   private async load(tenantId: string, conversationId: string): Promise<ConversationRow> {
@@ -96,7 +98,8 @@ export class HandoffService {
     conversation: ConversationRow,
     reason: HandoffReason,
   ): Promise<{ status: ConversationStatus; agentsOnline: boolean }> {
-    const agentsOnline = (await this.realtime.agentsOnline(tenantId)) > 0;
+    // Online agents only: someone who set themselves to "away" cannot pick it up now.
+    const agentsOnline = (await this.presence.onlineCount(tenantId)) > 0;
     if (conversation.status !== 'ai') return { status: conversation.status, agentsOnline };
     const moved = await this.move(tenantId, conversation, 'waiting', { handoffReason: reason });
     if (!moved) return { status: conversation.status, agentsOnline };

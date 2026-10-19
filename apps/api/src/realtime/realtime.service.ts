@@ -8,6 +8,7 @@ import {
 import {
   type AgentClientEvents,
   type AgentMessage,
+  type AgentPresence,
   type AgentServerEvents,
   CHANNELS,
   type ConversationStatus,
@@ -28,6 +29,8 @@ type AgentNamespace = Namespace<AgentClientEvents, AgentServerEvents>;
 export const rooms = {
   tenant: (tenantId: string) => `tenant:${tenantId}`,
   conversation: (conversationId: string) => `conversation:${conversationId}`,
+  /** Every widget socket of a tenant (presence: "is anyone on the team online?"). */
+  widgets: (tenantId: string) => `widgets:${tenantId}`,
 };
 
 /**
@@ -107,14 +110,40 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
       .emit('conversation:status', { conversationId, status, agentName, agentsOnline });
   }
 
-  /** Dashboards connected for this tenant, on every API instance (Redis adapter). */
-  async agentsOnline(tenantId: string): Promise<number> {
-    if (!this.agent) return 0;
-    try {
-      return (await this.agent.in(rooms.tenant(tenantId)).fetchSockets()).length;
-    } catch (error) {
-      this.logger.warn(`Could not count online agents: ${(error as Error).message}`);
-      return 0;
-    }
+  /** An agent is typing: shown in the visitor's widget. */
+  visitorTyping(conversationId: string, typing: boolean, name: string | null): void {
+    this.widget?.to(rooms.conversation(conversationId)).emit('typing', {
+      conversationId,
+      typing,
+      name,
+    });
+  }
+
+  /** The customer is typing: shown to the tenant's agents. */
+  customerTyping(tenantId: string, conversationId: string, typing: boolean): void {
+    this.agent?.to(rooms.tenant(tenantId)).emit('typing', {
+      conversationId,
+      typing,
+      from: 'customer',
+      userId: null,
+      name: null,
+    });
+  }
+
+  /** An agent read the conversation: "Seen" under the customer's messages in the widget. */
+  visitorReadReceipt(conversationId: string, readAt: string): void {
+    this.widget?.to(rooms.conversation(conversationId)).emit('conversation:read', {
+      conversationId,
+      readAt,
+    });
+  }
+
+  presenceChanged(tenantId: string, agents: AgentPresence[]): void {
+    this.agent?.to(rooms.tenant(tenantId)).emit('presence:update', { agents });
+  }
+
+  /** "Is anyone on the team online?" changed: tell every open widget of the tenant. */
+  widgetPresence(tenantId: string, agentsOnline: boolean): void {
+    this.widget?.to(rooms.widgets(tenantId)).emit('presence', { agentsOnline });
   }
 }
