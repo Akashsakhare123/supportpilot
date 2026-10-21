@@ -48,6 +48,16 @@ export const apiEnvSchema = baseEnvSchema.extend({
   STRIPE_PRICE_BUSINESS: optional(
     z.string().startsWith('price_', 'STRIPE_PRICE_BUSINESS must be a price id'),
   ),
+  /**
+   * Rate limits (T15) are multiplied by this (e.g. 1000 in integration tests that send many
+   * requests from one address). 0 turns rate limiting off.
+   */
+  RATE_LIMIT_MULTIPLIER: z.coerce.number().min(0).default(1),
+  /**
+   * Express "trust proxy": which proxies may set X-Forwarded-For (the client IP for rate limits).
+   * loopback = the dashboard's /api proxy on the same machine; in production the platform's proxy.
+   */
+  TRUST_PROXY: z.string().default('loopback'),
 });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;

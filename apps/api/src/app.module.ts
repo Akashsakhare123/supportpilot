@@ -12,6 +12,7 @@ import { InboxModule } from './inbox/inbox.module';
 import { QueueModule } from './queue/queue.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { RedisModule } from './redis/redis.module';
+import { SecurityModule } from './security/security.module';
 import { StorageModule } from './storage/storage.module';
 import { TenantModule } from './tenant/tenant.module';
 import { UsersModule } from './users/users.module';
@@ -22,6 +23,7 @@ import { WidgetModule } from './widget/widget.module';
     ConfigModule,
     DatabaseModule,
     RedisModule,
+    SecurityModule,
     QueueModule,
     RealtimeModule,
     StorageModule,

@@ -14,4 +14,6 @@ export function loadTestEnv(): void {
   process.env.STRIPE_WEBHOOK_SECRET = 'whsec_integration_test_secret';
   process.env.STRIPE_PRICE_PRO = 'price_test_pro';
   process.env.STRIPE_PRICE_BUSINESS = 'price_test_business';
+  // Suites send bursts from one address; the security suite turns real limits back on.
+  process.env.RATE_LIMIT_MULTIPLIER = '1000';
 }

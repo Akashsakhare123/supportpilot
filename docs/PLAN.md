@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[################----] 82%`  **14 / 17 tasks done** (89 / 108 est. hours)  
+`[##################--] 88%`  **15 / 17 tasks done** (95 / 108 est. hours)  
 Last update: 2026-10-21  
-**Current / next task:** T15 Security hardening (Not started)
+**Current / next task:** T16 CI/CD and deployment (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -32,7 +32,7 @@ Last update: 2026-10-21
 | [T12](#t12---analytics-dashboard) | Week 5 | Analytics dashboard | Done | 2026-10-21 |
 | [T13](#t13---stripe-billing-and-plan-limits) | Week 5 | Stripe billing and plan limits | Done | 2026-10-21 |
 | [T14](#t14---tests) | Week 6 | Tests | Done | 2026-10-21 |
-| [T15](#t15---security-hardening) | Week 6 | Security hardening | Not started |  |
+| [T15](#t15---security-hardening) | Week 6 | Security hardening | Done | 2026-10-21 |
 | [T16](#t16---cicd-and-deployment) | Week 6 | CI/CD and deployment | Not started |  |
 | [T17](#t17---readme-architecture-diagram-demo-video) | Week 6 | README, architecture diagram, demo video | Not started |  |
 <!-- /AUTO:STATUS -->
@@ -47,7 +47,7 @@ Last update: 2026-10-21
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 2/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 3/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 2/2 |
-| Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 1/4 |
+| Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 2/4 |
 <!-- /AUTO:MILESTONES -->
 
 ## Scope
@@ -471,25 +471,25 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T15 - Security hardening
 
-`Not started` · est. 6 h · depends on: T14
+`Done` · est. 6 h · depends on: T14 · completed 2026-10-21
 
 **Goal:** Close the gaps most portfolio projects leave open.
 
 **Subtasks**
 
-- [ ] Rate limiting per IP and per tenant (Redis store) on auth, widget and chat; socket message rate limit
-- [ ] Prompt-injection defense: user input and retrieved docs treated as untrusted data, system prompt never echoed, pattern checks, output filter
-- [ ] PII redaction (emails, phones, card numbers with Luhn check) before LLM calls and in logs
-- [ ] Postgres Row-Level Security on tenant tables as defense in depth (app.tenant_id set per transaction)
-- [ ] Helmet, strict CORS, input validation everywhere, dependency audit
-- [ ] docs/SECURITY.md: one-page threat model
+- [x] Rate limiting per IP and per tenant (Redis store) on auth, widget and chat; socket message rate limit
+- [x] Prompt-injection defense: user input and retrieved docs treated as untrusted data, system prompt never echoed, pattern checks, output filter
+- [x] PII redaction (emails, phones, card numbers with Luhn check) before LLM calls and in logs
+- [x] Postgres Row-Level Security on tenant tables as defense in depth (app.tenant_id set per transaction)
+- [x] Helmet, strict CORS, input validation everywhere, dependency audit
+- [x] docs/SECURITY.md: one-page threat model
 
 **Acceptance criteria**
 
-- [ ] A burst of 100 requests/second from one IP receives 429s
-- [ ] Injection prompts from the eval set do not change behavior
-- [ ] PII is masked in stored logs and in the LLM payload (test)
-- [ ] RLS blocks a cross-tenant query even with the app filter removed (test)
+- [x] A burst of 100 requests/second from one IP receives 429s
+- [x] Injection prompts from the eval set do not change behavior
+- [x] PII is masked in stored logs and in the LLM payload (test)
+- [x] RLS blocks a cross-tenant query even with the app filter removed (test)
 
 **Deliverables:** Rate limiter, Injection + PII guards, RLS policies, SECURITY.md  
 **Standout feature:** Prompt-injection and PII safeguards  

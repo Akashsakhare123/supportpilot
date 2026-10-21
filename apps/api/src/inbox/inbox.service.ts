@@ -8,6 +8,7 @@ import {
   type MessageRow,
   sql,
   users,
+  withTenant,
 } from '@supportpilot/db';
 import type {
   AgentMessage,
@@ -107,8 +108,10 @@ export class InboxService {
     private readonly realtime: RealtimeService,
   ) {}
 
+  /** Raw SQL with subqueries on messages: also run under row-level security (T15). */
   private async summaries(tenantId: string, where: ReturnType<typeof sql>, limit: number) {
-    const result = await this.db.execute<SummaryRow>(sql`
+    const result = await withTenant(this.db, tenantId, (tx) =>
+      tx.execute<SummaryRow>(sql`
       select c.id, c.status, c.visitor_id, c.origin, c.assigned_agent_id, u.name as agent_name,
         c.low_confidence_streak, c.handoff_reason, c.contact_email, c.last_message_at, c.created_at,
         lm.sender as last_sender, lm.content as last_content, lm.created_at as last_created_at,
@@ -132,7 +135,8 @@ export class InboxService {
       ) lm on true
       where c.tenant_id = ${tenantId} and ${NOT_PLAYGROUND} and ${where}
       order by c.last_message_at desc
-      limit ${limit}`);
+      limit ${limit}`),
+    );
     return result.rows.map(toSummary);
   }
 
@@ -145,7 +149,8 @@ export class InboxService {
   }
 
   async counts(tenantId: string, userId: string): Promise<Record<InboxTab, number>> {
-    const result = await this.db.execute<Record<InboxTab, number>>(sql`
+    const result = await withTenant(this.db, tenantId, (tx) =>
+      tx.execute<Record<InboxTab, number>>(sql`
       select
         count(*) filter (where ${tabFilter('needs_agent', userId)})::int as needs_agent,
         count(*) filter (where ${tabFilter('mine', userId)})::int as mine,
@@ -153,7 +158,8 @@ export class InboxService {
         count(*) filter (where ${tabFilter('ai', userId)})::int as ai,
         count(*) filter (where ${tabFilter('closed', userId)})::int as closed
       from conversations c
-      where c.tenant_id = ${tenantId} and ${NOT_PLAYGROUND}`);
+      where c.tenant_id = ${tenantId} and ${NOT_PLAYGROUND}`),
+    );
     const row = result.rows[0];
     return {
       needs_agent: Number(row?.needs_agent ?? 0),

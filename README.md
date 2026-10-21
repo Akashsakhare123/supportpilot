@@ -9,9 +9,9 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 ## Progress
 
 <!-- AUTO:PROGRESS -->
-![progress](https://img.shields.io/badge/progress-14%2F17%20tasks-3B3F8C)
+![progress](https://img.shields.io/badge/progress-15%2F17%20tasks-3B3F8C)
 
-`[################----] 82%` - currently on **T15 Security hardening**
+`[##################--] 88%` - currently on **T16 CI/CD and deployment**
 
 | Milestone | Release | Progress |
 |---|---|---|
@@ -20,7 +20,7 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 | M3 AI chat MVP | v0.3.0 | 2/2 (done) |
 | M4 Human handoff | v0.4.0 | 3/3 (done) |
 | M5 Business features | v0.5.0 | 2/2 (done) |
-| M6 Production ready | v1.0.0 | 1/4 (in progress) |
+| M6 Production ready | v1.0.0 | 2/4 (in progress) |
 
 Full plan: [docs/PLAN.md](docs/PLAN.md) · Build log: [docs/PROGRESS.md](docs/PROGRESS.md)
 <!-- /AUTO:PROGRESS -->
@@ -76,6 +76,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, chat flow, RAG, handoff state machine, data model, multi-tenancy, security |
 | [PIPELINE.md](docs/PIPELINE.md) | CI/CD pipeline: stages, environments, secrets, deploy and rollback |
 | [TESTING.md](docs/TESTING.md) | Test layers, tenant isolation suite, coverage, the RAG eval set and its baseline |
+| [SECURITY.md](docs/SECURITY.md) | One-page threat model: tenant isolation with RLS, rate limits, injection and PII guards |
 | [WORKFLOW.md](docs/WORKFLOW.md) | How each task goes from start to done, branching, commits, PR checklist |
 | [PROGRESS.md](docs/PROGRESS.md) | Dated build log |
 

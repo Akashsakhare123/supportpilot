@@ -8,7 +8,7 @@ import {
   groupThresholdFor,
   LocalHashEmbeddings,
 } from '@supportpilot/ai';
-import { type Database, sql } from '@supportpilot/db';
+import { type Database, sql, type TenantTx, withTenant } from '@supportpilot/db';
 import {
   ANALYTICS,
   type AnalyticsDay,
@@ -124,11 +124,18 @@ export class AnalyticsService {
     // Range boundaries are local midnights in the viewer's time zone; `to` is inclusive.
     const start = sql`(${range.from}::date)::timestamp at time zone ${range.tz}`;
     const end = sql`(${range.to}::date + 1)::timestamp at time zone ${range.tz}`;
-    const [conversationRows, feedbackRows, questionRows] = await Promise.all([
-      this.conversationDays(tenantId, range.tz, start, end),
-      this.feedbackDays(tenantId, range.tz, start, end),
-      this.questions(tenantId, start, end),
-    ]);
+    // One transaction under row-level security (T15): even a query that lost its tenant filter
+    // could only read this tenant's rows.
+    const [conversationRows, feedbackRows, questionRows] = await withTenant(
+      this.db,
+      tenantId,
+      async (tx) =>
+        [
+          await this.conversationDays(tx, tenantId, range.tz, start, end),
+          await this.feedbackDays(tx, tenantId, range.tz, start, end),
+          await this.questions(tx, tenantId, start, end),
+        ] as const,
+    );
 
     const totals = conversationRows.find((r) => r.day === null);
     const ratings = feedbackRows.find((r) => r.day === null);
@@ -188,12 +195,13 @@ export class AnalyticsService {
 
   /** Per day (and the total, day = null): conversations, AI-resolved vs handed off, response times. */
   private async conversationDays(
+    db: TenantTx,
     tenantId: string,
     tz: string,
     start: ReturnType<typeof sql>,
     end: ReturnType<typeof sql>,
   ): Promise<ConversationDayRow[]> {
-    const result = await this.db.execute<ConversationDayRow>(sql`
+    const result = await db.execute<ConversationDayRow>(sql`
       with conv as (
         select (c.created_at at time zone ${tz})::date as day,
           c.first_handoff_at, fq.at as first_question_at, fr.at as first_reply_at,
@@ -228,12 +236,13 @@ export class AnalyticsService {
 
   /** Per day (and the total): AI answers and the customers' thumbs up / down on them. */
   private async feedbackDays(
+    db: TenantTx,
     tenantId: string,
     tz: string,
     start: ReturnType<typeof sql>,
     end: ReturnType<typeof sql>,
   ): Promise<FeedbackDayRow[]> {
-    const result = await this.db.execute<FeedbackDayRow>(sql`
+    const result = await db.execute<FeedbackDayRow>(sql`
       with answers as (
         select (m.created_at at time zone ${tz})::date as day, m.feedback
         from messages m
@@ -252,11 +261,12 @@ export class AnalyticsService {
 
   /** Customer questions (newest first) with the reply that came next, if the AI gave it. */
   private async questions(
+    db: TenantTx,
     tenantId: string,
     start: ReturnType<typeof sql>,
     end: ReturnType<typeof sql>,
   ): Promise<QuestionRow[]> {
-    const result = await this.db.execute<QuestionRow>(sql`
+    const result = await db.execute<QuestionRow>(sql`
       select q.id, q.conversation_id, q.content, q.created_at,
         a.sender as answer_sender, a.confidence, a.needs_human, a.feedback,
         a.metadata->>'reason' as reason

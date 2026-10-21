@@ -542,9 +542,9 @@
       "week": "Week 6",
       "title": "Security hardening",
       "notes": "Rate limiting, prompt-injection and PII safeguards",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-21",
+      "completed": "2026-10-21",
       "est_hours": 6,
       "depends": [
         "T14"

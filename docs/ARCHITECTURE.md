@@ -242,9 +242,9 @@ erDiagram
 |---|---|---|
 | 1. Request context | Tenant id comes only from the verified JWT (dashboard) or the public key (widget). The global `JwtAuthGuard` attaches `{ userId, tenantId, role }` to the request and handlers receive it with `@Auth()`. Never read from the body or query string. | Spoofed tenant ids |
 | 2. Scoped data access | Repository functions take `tenantId` as a required argument; there is no unscoped query helper. | Forgotten `WHERE` clauses |
-| 3. Postgres RLS *(T15)* | Row-Level Security policies on every tenant table, using `SET LOCAL app.tenant_id` per transaction. | Bugs that slip past layers 1-2 |
+| 3. Postgres RLS (T15) | Row-level security policies on every tenant table for the `supportpilot_app` role (migration 0010). `withTenant(db, tenantId, fn)` runs `fn` in a transaction with `SET LOCAL ROLE supportpilot_app` and `app.tenant_id`; no tenant set = no rows (fail closed). Used for vector search, analytics and the inbox's raw SQL; workers, migrations and seeds run as the owner. | Bugs that slip past layers 1-2 |
 
-The tenant isolation test suite (T14) creates two tenants and asserts that no endpoint, socket event or search ever returns the other tenant's data.
+The tenant isolation test suite (T14) creates two tenants and asserts that no endpoint or search ever returns or changes the other tenant's data, and a route census fails CI when a new endpoint is not covered. The T15 security suite shows RLS hiding another tenant's rows from a query with no tenant filter. Threat model: [SECURITY.md](SECURITY.md).
 
 ## 6b. Authentication and roles (T02)
 
@@ -388,14 +388,15 @@ Agent commands that change data (claim, reply, hand back, close, read) are REST 
 
 | Threat | Control | Task |
 |---|---|---|
-| Cross-tenant data access | 3-layer tenancy (above) + isolation tests | T02, T14, T15 |
+| Cross-tenant data access | 3-layer tenancy (above, RLS since T15) + isolation suite with route census | T02, T14, T15 |
 | Credential theft | argon2 hashes, 15-min access tokens, rotating httpOnly refresh cookie | T02 |
 | Widget embedded on a foreign site | Allowed-domains origin check on connect | T03, T08 |
 | SSRF via URL ingestion | DNS resolve + block private / loopback / metadata IP ranges, size + time limits | T04 |
 | Malicious uploads | Size limit, MIME + magic-byte check, parsing in the worker | T04 |
-| Prompt injection | User input and retrieved docs passed as delimited untrusted data; system prompt never echoed; pattern checks; eval set includes attacks | T07, T15 |
-| PII leakage | Redaction before LLM calls and in logs | T15 |
-| Abuse / cost attacks | Per-IP and per-tenant rate limits, plan limits | T13, T15 |
+| Prompt injection | User input and retrieved docs passed as delimited untrusted data; injected instructions stripped before retrieval and generation (`packages/ai/src/guard.ts`); streamed answers cut off before they repeat the system prompt (`LeakGuard`); eval set includes attacks | T07, T15 |
+| PII leakage | Emails, phones, cards masked before LLM / embedding calls (T07) and in every API log line (`RedactingLogger`, T15) | T07, T15 |
+| Abuse / cost attacks | Redis rate limits per address (all routes, auth, widget chat, socket connects) and per tenant (chat), 429 + Retry-After; plan limits | T13, T15 |
+| Browser attacks, vulnerable packages | Helmet on the API, security headers on the dashboard; `pnpm audit --prod --audit-level high` in CI | T15 |
 | Forged billing events | Stripe signature verification, idempotent by event id | T13 |
 
 ## 9. Repository layout
@@ -501,5 +502,9 @@ never pull in `node:fs`.
 | D68 | Route census in the isolation suite (every Express route must be classified) | A hand-maintained list only | A new endpoint without an isolation check fails CI instead of silently widening the attack surface. |
 | D69 | Coverage from the integration suites for the API, thresholds per core service | Unit coverage only, one global number | The API's logic lives in services that only make sense against Postgres + Redis; per-file thresholds stop one well-tested file hiding an untested one. |
 | D70 | Playwright drives the installed Edge locally, Chromium in CI | Always download browsers | No 150 MB download on developer machines; CI stays reproducible. |
+| D71 | RLS policies for a dedicated `supportpilot_app` role entered with `SET LOCAL ROLE` inside `withTenant()` | `FORCE ROW LEVEL SECURITY` for the owner, a separate login user for the API | Works with a superuser in development and a normal user in production, leaves workers / migrations / seeds untouched, and fails closed (no rows) whenever the tenant is missing. |
+| D72 | Fixed-window Redis rate limits in Express middleware before routing, failing open | `@nestjs/throttler`, in-memory counters, sliding windows | Shared by every API instance, also covers 404s and login before the auth guard, one round trip per rule; an outage of the limiter must not take the product down. |
+| D73 | Strip injected instructions from the question and guard the output stream | Refuse any message with a suspicious phrase, rely on the prompt alone | The customer's real question still gets answered (same answer as without the attack), the model never sees the instruction, and a leaking model is cut off mid-stream. |
+| D74 | Mask PII in the logger itself | Remember to redact at every log call | One place, also catches error messages and stack traces from libraries. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

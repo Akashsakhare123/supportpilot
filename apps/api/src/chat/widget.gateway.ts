@@ -29,6 +29,8 @@ import { InboxService } from '../inbox/inbox.service';
 import { PresenceService } from '../realtime/presence.service';
 import { withinRate } from '../realtime/rate-window';
 import { RealtimeService, rooms } from '../realtime/realtime.service';
+import { SOCKET_CONNECT_LIMIT, TENANT_CHAT_LIMIT } from '../security/rate-limits';
+import { RateLimiter, TOO_MANY } from '../security/rate-limiter.service';
 import { WidgetService } from '../widget/widget.service';
 import { ChatService } from './chat.service';
 
@@ -82,6 +84,7 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
     private readonly handoff: HandoffService,
     private readonly inbox: InboxService,
     private readonly presence: PresenceService,
+    private readonly limiter: RateLimiter,
   ) {}
 
   /** Handshake check: the client gets connect_error with the reason if it is refused. */
@@ -91,8 +94,18 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
       const auth = widgetAuthSchema.safeParse(socket.handshake.auth);
       if (!auth.success) return next(new Error('Invalid widget key or visitor id'));
       const origin = socket.handshake.headers.origin;
-      this.widget
-        .resolveTenant(auth.data.key, origin)
+      // Connections per address (T15): reconnect storms and scripted floods get refused.
+      this.limiter
+        .consume(
+          'ws-connect',
+          socket.handshake.address,
+          SOCKET_CONNECT_LIMIT.limit,
+          SOCKET_CONNECT_LIMIT.windowMs,
+        )
+        .then((quota) => {
+          if (!quota.allowed) throw new HttpException(TOO_MANY, 429);
+          return this.widget.resolveTenant(auth.data.key, origin);
+        })
         .then((tenant) => {
           socket.data = {
             tenant,
@@ -145,6 +158,21 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
     state.sent.push(now);
     // Set before any await, so a second message sent in the same instant is refused.
     state.busy = true;
+
+    // Per tenant across every visitor and API instance (T15).
+    const quota = await this.limiter.consume(
+      'tenant-chat',
+      state.tenant.id,
+      TENANT_CHAT_LIMIT.limit,
+      TENANT_CHAT_LIMIT.windowMs,
+    );
+    if (!quota.allowed) {
+      state.busy = false;
+      return fail(
+        'rate_limited',
+        'We are getting a lot of messages right now. Please try again in a minute.',
+      );
+    }
 
     let conversation: Awaited<ReturnType<ChatService['openConversation']>>;
     try {

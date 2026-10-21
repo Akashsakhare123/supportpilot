@@ -3,6 +3,8 @@ import { type ChatRequest, chatRequestSchema } from '@supportpilot/shared';
 import type { Response } from 'express';
 import { Public } from '../auth/decorators';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { TENANT_CHAT_LIMIT } from '../security/rate-limits';
+import { RateLimiter } from '../security/rate-limiter.service';
 import { WidgetService } from '../widget/widget.service';
 import { ChatService } from './chat.service';
 import { SseStream } from './sse';
@@ -19,6 +21,7 @@ export class ChatController {
   constructor(
     private readonly chat: ChatService,
     private readonly widget: WidgetService,
+    private readonly limiter: RateLimiter,
   ) {}
 
   @Post()
@@ -29,6 +32,13 @@ export class ChatController {
   ): Promise<void> {
     // Everything that can fail with a normal HTTP error happens before the stream opens.
     const tenant = await this.widget.resolveTenant(body.key, origin);
+    // Per tenant across every visitor and API instance (T15); per address is the middleware's job.
+    await this.limiter.assert(
+      'tenant-chat',
+      tenant.id,
+      TENANT_CHAT_LIMIT.limit,
+      TENANT_CHAT_LIMIT.windowMs,
+    );
     const conversation = await this.chat.openConversation({
       tenant,
       visitorId: body.visitorId,

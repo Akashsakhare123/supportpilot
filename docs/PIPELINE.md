@@ -30,7 +30,7 @@ flowchart LR
 |---|---|---|
 | `detect` | Checks which parts exist (`pnpm-lock.yaml`, Dockerfiles, Playwright config) so later jobs skip cleanly before they are built | never |
 | `docs` | Validates `tasks.json` and re-runs `progress.py sync`; diff must be empty | PLAN.md / README progress not synced after a task |
-| `quality` | `turbo run lint typecheck` and unit tests | lint / type / unit failure |
+| `quality` | `turbo run lint typecheck`, unit tests and `pnpm audit --prod --audit-level high` | lint / type / unit failure, a high advisory in a production dependency |
 | `integration` | `pnpm test:coverage`: API (incl. the tenant isolation suite) and worker tests against real Postgres (pgvector image) and Redis service containers, plus unit suites, with coverage; LLM + embeddings mocked, Stripe faked. Coverage summary in the job summary, lcov as artifact | integration failure, a core service under 70% of lines |
 | `build` | `turbo run build`; gzipped `widget.js` must be <= 60 KB | build error or widget over budget |
 | `docker` | Builds api + worker images (no push) with GitHub cache | Dockerfile broken |

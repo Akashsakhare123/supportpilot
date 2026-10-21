@@ -71,6 +71,13 @@
       "when": 1792574791099,
       "tag": "0009_lonely_captain_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792579463284,
+      "tag": "0010_row_level_security",
+      "breakpoints": true
     }
   ]
 }

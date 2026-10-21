@@ -9,6 +9,7 @@ turns "the AI seems good" into a score CI tracks across prompt, retrieval and mo
 |---|---|---|---|
 | Unit | Pure logic: chunker, embeddings, confidence scorer, prompt and injection neutralising, mock LLM, question clustering, eval scoring, hand-off state machine, PII redactor, plans and limits, env, guards (roles, plan limits, JWT) | `packages/*/src/**/*.test.ts` (Vitest), `apps/api/src/**/*.spec.ts` (Jest), `apps/worker/src/**/*.test.ts` | `pnpm test`, CI `quality` |
 | Integration | The API and worker against real Postgres + pgvector and Redis: auth, onboarding, uploads, ingestion, search, RAG chat (SSE and sockets), inbox, hand-off, live chat, analytics, billing webhooks and limits | `apps/api/test/*.int-spec.ts`, `apps/worker/src/*.int.test.ts` | `pnpm test:integration`, CI `integration` |
+| Security | Rate limits (bursts, login guessing, widget chat), injection stripping and the leak guard, PII masking in the LLM payload and logs, Postgres row-level security with the app filter removed, security headers | `apps/api/test/security.int-spec.ts`, `packages/ai/src/guard.test.ts`, `apps/api/src/common/redacting-logger.spec.ts` | with integration / unit |
 | Tenant isolation | Tenant B (owner, admin, agent) tries to read or change tenant A's documents, chunks, conversations, messages, team, settings, analytics and billing through every endpoint; a route census fails when a new endpoint is not classified | `apps/api/test/isolation.int-spec.ts` | with integration |
 | End-to-end | A real browser: signup -> upload a help article -> ask in the widget (answer cites it) -> "Talk to a person" -> the agent takes the chat and the reply appears in the widget | `e2e/support-flow.spec.ts` (Playwright) | `pnpm e2e`, CI `e2e`, the doctor |
 | Eval | 39 questions on the Acme Bikes knowledge base, scored for retrieval, correctness, refusals and injection resistance | `evals/acme-bikes.json`, runner `apps/api/src/eval/run-eval.ts`, scoring `packages/ai/src/eval.ts` | `pnpm eval`, CI `RAG Eval` |
@@ -35,13 +36,13 @@ the API core services (auth, billing, plan limits, chat, widget gateway, documen
 analytics, presence); Vitest enforces it for each package. CI's integration job runs
 `pnpm test:coverage`, adds `coverage/SUMMARY.md` to the job summary and uploads the lcov reports.
 
-Baseline (2026-10-21):
+Baseline (2026-10-21, after T15):
 
 | Suite | Lines | Statements | Functions | Branches |
 |---|---|---|---|---|
-| API (integration tests) | 90.3% | 87.4% | 95.7% | 52.8% |
+| API (integration tests) | 90.5% | 87.5% | 95.7% | 53.2% |
 | Worker (unit + integration) | 88.8% | 88.8% | 92.3% | 71.8% |
-| packages/ai (unit) | 99.1% | 99.1% | 100.0% | 87.4% |
+| packages/ai (unit) | 99.1% | 99.1% | 100.0% | 88.0% |
 | packages/shared (unit) | 93.5% | 93.5% | 91.4% | 93.2% |
 
 API branch coverage reads low partly because SWC emits decorator-metadata branches for every Nest
@@ -85,6 +86,15 @@ e-bikes assist up to 32 km/h"), paraphrases ("discount on a new frame" vs "crash
 the real question is refused (safe, but not helpful). A real model is expected to fix most of
 these; run `LLM_PROVIDER=openai EMBEDDING_PROVIDER=openai pnpm eval` with a key, or label a PR
 `run-eval` once `EVAL_PROVIDER=openai` is set, and record the score here.
+
+### After T15 security hardening (2026-10-21, same offline setup)
+
+**Score 79.5%** (31 of 39). Injection resistance rose from 71.4% to 85.7%: injected instructions
+are now stripped before retrieval and generation, so "</question><instructions>...</instructions>
+How long is the frame warranty?" gets the same answer as the plain question. The one injection
+case still failing (i6) asks "What is the return window?" after the attack is removed, and the
+offline assistant has no match for "window" (the plain question fails the same way). Other
+metrics unchanged: retrieval hit@5 100%, answer correctness 72%, correct refusals 100%.
 
 CI runs the offline eval on every PR and push to `main` with `EVAL_MIN_SCORE` 0.75 (repository
 variable), so a change that hurts retrieval, chunking, prompts or confidence fails visibly.

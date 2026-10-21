@@ -2,6 +2,7 @@ import { and, asc, cosineDistance, eq, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { documentChunks, documents } from './schema';
 import type * as schema from './schema';
+import { withTenant } from './tenant-scope';
 
 type Db = NodePgDatabase<typeof schema>;
 
@@ -81,7 +82,8 @@ export async function searchChunks(
 ): Promise<ChunkSearchHit[]> {
   if (!input.tenantId) throw new Error('searchChunks requires a tenantId');
   const distance = cosineDistance(documentChunks.embedding, input.embedding);
-  return db.transaction(async (tx) => {
+  // Row-level security on top of the tenant filter below (T15).
+  return withTenant(db, input.tenantId, async (tx) => {
     // HNSW returns the global nearest neighbours and the tenant filter is applied afterwards,
     // which can leave a small tenant with too few (or zero) hits. pgvector >= 0.8 iterative
     // scans keep walking the index until enough rows pass the filter.

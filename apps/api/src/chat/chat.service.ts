@@ -2,6 +2,9 @@ import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   AnswerStreamSplitter,
   asksForHuman,
+  LeakGuard,
+  leaksPrompt,
+  stripInjection,
   buildRagMessages,
   calibrationFor,
   citedRefs,
@@ -57,6 +60,9 @@ export const CHAT_TEXT = {
   limitTeam: 'Thanks for your message. A person from our team will reply here shortly.',
   limitOffline:
     "Thanks for your message. Our team isn't online right now. Leave your email below and we'll get back to you.",
+  /** The message only tried to steer the assistant (T15). */
+  injection: (tenantName: string) =>
+    `I can only help with questions about ${tenantName}: products, orders, delivery and policies. What would you like to know?`,
   limitPlayground:
     "This workspace has used all of this month's AI answers. Upgrade on the Billing page to keep testing; customers are handed to your team meanwhile.",
 } as const;
@@ -177,8 +183,28 @@ export class ChatService {
       return { ...done, conversationStatus: handoff?.status ?? done.conversationStatus };
     }
 
+    // Injection guard (T15): instructions aimed at the assistant are removed from the question;
+    // a message that was only an attack gets a fixed reply without calling the model.
+    const guarded = stripInjection(pii.text);
+    const injection = guarded.flags.length ? { injection: guarded.flags } : {};
+    if (guarded.flags.length) {
+      this.logger.warn(`Injection attempt in tenant ${tenant.id}: ${guarded.flags.join(', ')}`);
+    }
+    if (!guarded.clean) {
+      const text = CHAT_TEXT.injection(tenant.name);
+      sink.delta(text);
+      return this.finish(tenant, conversation, started, {
+        content: text,
+        sources: [],
+        confidence: 0,
+        needsHuman: false,
+        metadata: { reason: 'injection_blocked', ...injection },
+        metered: false,
+      });
+    }
+
     // Retrieval: the masked question, this tenant only, same embedding model only.
-    const [queryVector] = await this.embeddings.embed([pii.text]);
+    const [queryVector] = await this.embeddings.embed([guarded.clean]);
     const { floor } = calibrationFor(this.embeddings.model);
     const hits = (
       await searchChunks(this.db, {
@@ -204,14 +230,14 @@ export class ChatService {
           sources: [],
           confidence: 0,
           needsHuman: true,
-          metadata: { reason: 'no_relevant_passages', retrieval },
+          metadata: { reason: 'no_relevant_passages', retrieval, ...injection },
         }),
       );
     }
 
     const prompt = buildRagMessages({
       tenantName: tenant.name,
-      question: pii.text,
+      question: guarded.clean,
       passages: hits.map((hit, i) => ({
         ref: i + 1,
         title: hit.documentTitle,
@@ -224,8 +250,10 @@ export class ChatService {
       })),
     });
 
-    // Generation, streamed; the metadata line is split off and never shown.
+    // Generation, streamed; the metadata line is split off and never shown, and the LeakGuard
+    // cuts the answer off before any part of the system prompt reaches the customer.
     const splitter = new AnswerStreamSplitter();
+    const leakGuard = new LeakGuard();
     let content = '';
     let firstTokenMs: number | null = null;
     let meta: AnswerMeta | null = null;
@@ -233,24 +261,43 @@ export class ChatService {
     try {
       for await (const chunk of this.llm.stream(prompt, { signal })) {
         if (signal?.aborted) break;
-        const visible = splitter.push(chunk);
+        const visible = leakGuard.push(splitter.push(chunk));
+        if (leakGuard.leaked) break;
         if (visible) {
           firstTokenMs ??= Date.now() - started;
           content += visible;
           sink.delta(visible);
         }
       }
-      const end = splitter.finish();
-      if (end.rest) {
-        content += end.rest;
-        sink.delta(end.rest);
+      if (!leakGuard.leaked) {
+        const end = splitter.finish();
+        const rest = leakGuard.push(end.rest) + leakGuard.finish();
+        if (rest && !leakGuard.leaked) {
+          content += rest;
+          sink.delta(rest);
+        }
+        meta = end.meta;
       }
-      meta = end.meta;
     } catch (error) {
       failure = error instanceof Error ? error.message : String(error);
       if (!signal?.aborted) this.logger.warn(`LLM failed for tenant ${tenant.id}: ${failure}`);
     }
     content = content.trim();
+
+    if (leakGuard.leaked || leaksPrompt(content)) {
+      this.logger.warn(`Blocked an answer that repeated the system prompt (tenant ${tenant.id})`);
+      return this.afterAnswer(
+        tenant,
+        conversation,
+        await this.finish(tenant, conversation, started, {
+          content: CHAT_TEXT.notFound,
+          sources: [],
+          confidence: 0,
+          needsHuman: true,
+          metadata: { reason: 'prompt_leak_blocked', retrieval, ...injection },
+        }),
+      );
+    }
 
     if (failure && !signal?.aborted && !content) {
       sink.delta(CHAT_TEXT.error);
@@ -308,6 +355,7 @@ export class ChatService {
         answered,
         ...(signal?.aborted ? { aborted: true } : {}),
         ...(pii.found.length ? { piiMasked: pii.found } : {}),
+        ...injection,
       },
     });
     return this.afterAnswer(tenant, conversation, done);
