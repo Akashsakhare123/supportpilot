@@ -53,6 +53,20 @@
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "outputs": ["coverage/**"],
+      "passThroughEnv": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "DATABASE_URL_TEST",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "LLM_PROVIDER",
+        "EMBEDDING_PROVIDER"
+      ]
     }
   }
 }

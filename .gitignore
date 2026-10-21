@@ -33,3 +33,8 @@ Thumbs.db
 
 # local uploads (StorageService local driver)
 .data/
+evals/report.*
+
+# Playwright (T14)
+playwright-report/
+test-results/

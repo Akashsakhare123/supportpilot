@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[###############-----] 76%`  **13 / 17 tasks done** (81 / 108 est. hours)  
+`[################----] 82%`  **14 / 17 tasks done** (89 / 108 est. hours)  
 Last update: 2026-10-21  
-**Current / next task:** T14 Tests (Not started)
+**Current / next task:** T15 Security hardening (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -31,7 +31,7 @@ Last update: 2026-10-21
 | [T11](#t11---typing-presence-history) | Week 4 | Typing, presence, history | Done | 2026-10-19 |
 | [T12](#t12---analytics-dashboard) | Week 5 | Analytics dashboard | Done | 2026-10-21 |
 | [T13](#t13---stripe-billing-and-plan-limits) | Week 5 | Stripe billing and plan limits | Done | 2026-10-21 |
-| [T14](#t14---tests) | Week 6 | Tests | Not started |  |
+| [T14](#t14---tests) | Week 6 | Tests | Done | 2026-10-21 |
 | [T15](#t15---security-hardening) | Week 6 | Security hardening | Not started |  |
 | [T16](#t16---cicd-and-deployment) | Week 6 | CI/CD and deployment | Not started |  |
 | [T17](#t17---readme-architecture-diagram-demo-video) | Week 6 | README, architecture diagram, demo video | Not started |  |
@@ -47,7 +47,7 @@ Last update: 2026-10-21
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 2/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 3/3 |
 | Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 2/2 |
-| Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 0/4 |
+| Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 1/4 |
 <!-- /AUTO:MILESTONES -->
 
 ## Scope
@@ -445,25 +445,25 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T14 - Tests
 
-`Not started` · est. 8 h · depends on: T13
+`Done` · est. 8 h · depends on: T13 · completed 2026-10-21
 
 **Goal:** Prove it works: automated tests on every PR plus a measurable answer-quality score.
 
 **Subtasks**
 
-- [ ] Unit: chunker, confidence scorer, handoff state machine, guards, PII redactor (written alongside each task, consolidated here)
-- [ ] Integration: API against real Postgres/pgvector + Redis (CI service containers)
-- [ ] Tenant isolation suite: tenant A can never read tenant B's docs, chunks or conversations through any endpoint
-- [ ] E2E (Playwright): signup -> upload doc -> ask in widget -> handoff -> agent reply
-- [ ] Eval set: 30-40 questions for the demo tenant (answerable, unanswerable, injection attempts)
-- [ ] Eval scorer: retrieval hit@k, answer correctness, correct-refusal rate; writes a report
-- [ ] Coverage report; target >= 70% on core services
+- [x] Unit: chunker, confidence scorer, handoff state machine, guards, PII redactor (written alongside each task, consolidated here)
+- [x] Integration: API against real Postgres/pgvector + Redis (CI service containers)
+- [x] Tenant isolation suite: tenant A can never read tenant B's docs, chunks or conversations through any endpoint
+- [x] E2E (Playwright): signup -> upload doc -> ask in widget -> handoff -> agent reply
+- [x] Eval set: 30-40 questions for the demo tenant (answerable, unanswerable, injection attempts)
+- [x] Eval scorer: retrieval hit@k, answer correctness, correct-refusal rate; writes a report
+- [x] Coverage report; target >= 70% on core services
 
 **Acceptance criteria**
 
-- [ ] CI runs unit + integration tests on every PR
-- [ ] Eval workflow publishes a score report; the baseline is recorded in docs
-- [ ] Isolation suite passes
+- [x] CI runs unit + integration tests on every PR
+- [x] Eval workflow publishes a score report; the baseline is recorded in docs
+- [x] Isolation suite passes
 
 **Deliverables:** Test suites, Eval set + scorer, Coverage report  
 **Standout feature:** Eval set  

@@ -101,8 +101,9 @@ pnpm dev:packages               # 2nd terminal, only when editing packages/share
 pnpm db:migrate && pnpm db:seed # schema (+ demo tenant "Acme Bikes" from T03)
 pnpm lint && pnpm typecheck && pnpm test
 pnpm test:integration           # needs docker compose running
-pnpm e2e                        # Playwright (T14)
-pnpm eval                       # RAG eval set (T14, needs an LLM key)
+pnpm test:coverage              # unit + integration with coverage (coverage/SUMMARY.md)
+pnpm e2e                        # Playwright end-to-end (starts or reuses pnpm dev)
+pnpm eval                       # RAG eval set (offline by default; see docs/TESTING.md)
 ```
 
 ## Local setup notes (Windows)

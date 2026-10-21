@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:integration": "jest --config jest.integration.config.js --runInBand"
+    "test:integration": "jest --config jest.integration.config.js --runInBand",
+    "test:coverage": "jest --config jest.integration.config.js --runInBand --coverage"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.3",

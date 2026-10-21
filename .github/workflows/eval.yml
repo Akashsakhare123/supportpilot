@@ -1,14 +1,25 @@
-# RAG eval: scores answer quality against the eval set in evals/.
-# Runs weekly, manually, or on a PR labelled "run-eval" (it calls a paid LLM API, so not on every PR).
-# Disabled until T14: set repository variable EVAL_ENABLED=true and secret LLM_API_KEY.
+# RAG eval: scores answer quality on the eval set in evals/ (T14) and publishes the report as the
+# job summary and an artifact.
+#   Default: the free offline assistant (LLM_PROVIDER=mock, local embeddings) on every PR and push
+#   to main, so a change to retrieval, chunking, prompts or confidence shows up as a score change.
+#   Real model: set repository variable EVAL_PROVIDER=openai and secret OPENAI_API_KEY; that run
+#   only happens weekly, manually, or on a PR labelled "run-eval" (it costs money).
+# The job fails when the score is below EVAL_MIN_SCORE (variable; default 0.75, the offline baseline
+# recorded in docs/PROGRESS.md is 0.769).
 name: RAG Eval
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: '0 3 * * 1' # Mondays 03:00 UTC
-  pull_request:
-    types: [labeled]
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -16,9 +27,6 @@ permissions:
 jobs:
   eval:
     name: Score answers on the eval set
-    if: >-
-      vars.EVAL_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' || github.event.label.name == 'run-eval')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -33,11 +41,15 @@ jobs:
         image: redis:7-alpine
         ports: ['6379:6379']
     env:
+      NODE_ENV: test
       DATABASE_URL: postgres://supportpilot:supportpilot@localhost:5432/supportpilot_eval
       REDIS_URL: redis://localhost:6379
-      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY || secrets.LLM_API_KEY }}
-      EVAL_MIN_SCORE: ${{ vars.EVAL_MIN_SCORE || '0.80' }}
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
+      # A paid model only on the schedule, manual runs or the "run-eval" label.
+      USE_REAL_MODEL: >-
+        ${{ vars.EVAL_PROVIDER == 'openai' && (github.event_name == 'schedule' ||
+        github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-eval')) }}
+      EVAL_MIN_SCORE: ${{ vars.EVAL_MIN_SCORE || '0.75' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -46,9 +58,17 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm db:migrate && pnpm db:seed
+      - run: pnpm db:migrate
       - name: Run eval
-        run: pnpm eval --report evals/report.md --min-score "$EVAL_MIN_SCORE"
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ "$USE_REAL_MODEL" = "true" ]; then
+            export LLM_PROVIDER=openai EMBEDDING_PROVIDER=openai
+          else
+            export LLM_PROVIDER=mock EMBEDDING_PROVIDER=local
+          fi
+          pnpm eval --report evals/report.md --min-score "$EVAL_MIN_SCORE"
       - name: Publish report
         if: always()
         run: '[ -f evals/report.md ] && cat evals/report.md >> "$GITHUB_STEP_SUMMARY" || true'
@@ -56,5 +76,5 @@ jobs:
         if: always()
         with:
           name: eval-report
-          path: evals/report.md
+          path: evals/report.*
           if-no-files-found: ignore

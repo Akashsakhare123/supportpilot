@@ -9,9 +9,9 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 ## Progress
 
 <!-- AUTO:PROGRESS -->
-![progress](https://img.shields.io/badge/progress-13%2F17%20tasks-3B3F8C)
+![progress](https://img.shields.io/badge/progress-14%2F17%20tasks-3B3F8C)
 
-`[###############-----] 76%` - currently on **T14 Tests**
+`[################----] 82%` - currently on **T15 Security hardening**
 
 | Milestone | Release | Progress |
 |---|---|---|
@@ -20,7 +20,7 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 | M3 AI chat MVP | v0.3.0 | 2/2 (done) |
 | M4 Human handoff | v0.4.0 | 3/3 (done) |
 | M5 Business features | v0.5.0 | 2/2 (done) |
-| M6 Production ready | v1.0.0 | 0/4 (planned) |
+| M6 Production ready | v1.0.0 | 1/4 (in progress) |
 
 Full plan: [docs/PLAN.md](docs/PLAN.md) · Build log: [docs/PROGRESS.md](docs/PROGRESS.md)
 <!-- /AUTO:PROGRESS -->
@@ -75,6 +75,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 | [PLAN.md](docs/PLAN.md) | 6-week plan, every task with subtasks and acceptance criteria, live status |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, chat flow, RAG, handoff state machine, data model, multi-tenancy, security |
 | [PIPELINE.md](docs/PIPELINE.md) | CI/CD pipeline: stages, environments, secrets, deploy and rollback |
+| [TESTING.md](docs/TESTING.md) | Test layers, tenant isolation suite, coverage, the RAG eval set and its baseline |
 | [WORKFLOW.md](docs/WORKFLOW.md) | How each task goes from start to done, branching, commits, PR checklist |
 | [PROGRESS.md](docs/PROGRESS.md) | Dated build log |
 
@@ -108,7 +109,8 @@ pnpm dev                        # api :4000, dashboard :3000, widget demo :5173,
 
 Demo logins (after `pnpm db:seed`): `owner@acme.test`, `admin@acme.test`, `agent@acme.test`, password `Password123!`.
 
-Checks: `pnpm lint && pnpm typecheck && pnpm test` · integration tests (needs Docker running): `pnpm test:integration`
+Checks: `pnpm lint && pnpm typecheck && pnpm test` · integration tests (needs Docker running): `pnpm test:integration` ·
+coverage: `pnpm test:coverage` · end-to-end: `pnpm e2e` · answer quality: `pnpm eval` (see [TESTING.md](docs/TESTING.md))
 
 Postgres runs on host port **5434** so it never clashes with a locally installed PostgreSQL on 5432 / 5433.
 

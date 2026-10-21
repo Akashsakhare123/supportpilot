@@ -124,7 +124,7 @@ stateDiagram-v2
 - **Waiting**: if an agent is online (dashboard sockets in the tenant room, counted across instances), the customer sees "Connecting you to a person...". If none is online, they get the offline reply and an email form in the widget. The email is saved on the conversation (`contact_email`) and shown in the inbox as "Follow up by email". The conversation stays `waiting` rather than `closed`, so it stays visible under *Needs agent*.
 - **While `waiting` or `human`** the RAG pipeline is skipped entirely (tested). *Hand back to AI* (`human | waiting -> ai`) resumes AI answers. *Close* ends the conversation, and the widget forgets it, so the next question starts a new one. Only the assigned agent can hand back or close a `human` conversation. Playground conversations never change status.
 
-**Confidence score** *(T07; weights and calibration re-tuned with the eval set in T14)*
+**Confidence score** *(T07; measured by the eval set since T14, not re-tuned: the offline baseline in [TESTING.md](TESTING.md) shows retrieval is not the bottleneck)*
 
 ```
 retrieval  = mean of the cited passages' cosine similarity, rescaled per embedding model
@@ -408,12 +408,14 @@ supportpilot/
 │  ├─ dashboard/    Next.js App Router + Tailwind v4
 │  └─ widget/       Preact + Vite library build -> dist/widget.js (Shadow DOM)
 ├─ packages/
-│  ├─ ai/           text extraction (PDF, HTML), chunker, embedding providers (server-only)
+│  ├─ ai/           text extraction (PDF, HTML), chunker, embeddings, LLM providers, prompt, confidence, eval scoring (server-only)
 │  ├─ db/           Drizzle client, schema, SQL migrations, migrate + seed scripts, chunk search
 │  └─ shared/       zod schemas, env parsing, queue names, shared types (browser-safe index + /node entry)
 ├─ infra/postgres/  init.sql (creates the integration-test database)
-├─ docs/            PLAN, ARCHITECTURE, PIPELINE, WORKFLOW, PROGRESS, plan/tasks.json
-├─ scripts/         progress.py (status sync), build_docx.py (Word doc)
+├─ e2e/             Playwright end-to-end test (signup -> widget -> hand-off -> agent reply)
+├─ evals/           RAG eval set (acme-bikes.json); runner in apps/api/src/eval
+├─ docs/            PLAN, ARCHITECTURE, PIPELINE, WORKFLOW, TESTING, PROGRESS, plan/tasks.json
+├─ scripts/         progress.py (status sync), build_docx.py (Word doc), doctor, coverage-summary.mjs
 ├─ .github/         workflows (ci, deploy, eval), PR template, dependabot
 ├─ docker-compose.yml          Postgres 16 + pgvector, Redis 7
 ├─ turbo.json, pnpm-workspace.yaml, tsconfig.base.json, eslint.config.mjs (shared by every package)
@@ -493,5 +495,11 @@ never pull in `node:fs`.
 | D62 | Monthly AI usage counted live from `usage_events` (calendar month, UTC) | A Redis counter, Stripe metered billing | Exact, already recorded since T07, one indexed count per message; a counter can come later if volume needs it. |
 | D63 | At the AI limit the chat goes to the team (waiting / email form), not an error | Refuse the message, keep answering and bill overage | The customer's visitor still gets help and never sees the business's plan; the business keeps every lead. |
 | D64 | A small `StripeGateway` interface around the SDK | Call the SDK everywhere, nock HTTP in tests | Tests run offline with a fake while webhook signatures are still checked by the real SDK. |
+| D65 | Eval runner inside the API build, calling the real `ChatService` on a throwaway tenant | A separate script that re-implements retrieval + prompt, HTTP calls to a running API | Scores exactly what customers get (retrieval floor, prompt, confidence, limits), needs no running server, and leaves no data behind. |
+| D66 | Eval scoring as pure functions in `@supportpilot/ai` with keyword groups per case | An LLM judge, exact-match answers | Deterministic, free, unit-tested and readable in a PR diff; an LLM judge can be added for real-model runs later. |
+| D67 | Offline eval on every PR, real-model eval on schedule / label | Real model on every PR, eval only weekly | Regressions in retrieval, chunking or confidence show up on the PR that caused them, at no cost; paid runs stay opt-in. |
+| D68 | Route census in the isolation suite (every Express route must be classified) | A hand-maintained list only | A new endpoint without an isolation check fails CI instead of silently widening the attack surface. |
+| D69 | Coverage from the integration suites for the API, thresholds per core service | Unit coverage only, one global number | The API's logic lives in services that only make sense against Postgres + Redis; per-file thresholds stop one well-tested file hiding an untested one. |
+| D70 | Playwright drives the installed Edge locally, Chromium in CI | Always download browsers | No 150 MB download on developer machines; CI stays reproducible. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

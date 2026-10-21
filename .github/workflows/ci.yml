@@ -72,16 +72,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo run lint typecheck
       - run: pnpm turbo run test
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage
-          path: '**/coverage/**'
-          if-no-files-found: ignore
-          retention-days: 7
 
   integration:
-    name: Integration tests (Postgres + pgvector, Redis)
+    name: Integration tests + coverage (Postgres + pgvector, Redis)
     needs: detect
     if: needs.detect.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -118,8 +111,23 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:migrate
-      # One suite at a time: the API and worker suites share the test database.
-      - run: pnpm test:integration
+      # Integration suites (API incl. the tenant isolation suite, worker) plus unit suites, with
+      # coverage; one suite at a time because the API and worker suites share the test database.
+      # Fails when a core service drops below 70% of lines.
+      - run: pnpm test:coverage
+      - name: Publish coverage summary
+        if: always()
+        run: '[ -f coverage/SUMMARY.md ] && cat coverage/SUMMARY.md >> "$GITHUB_STEP_SUMMARY" || true'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: |
+            coverage/SUMMARY.md
+            apps/*/coverage/**
+            packages/*/coverage/**
+          if-no-files-found: ignore
+          retention-days: 14
 
   build:
     name: Build all apps

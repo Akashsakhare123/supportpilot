@@ -4,8 +4,9 @@
   1. Checks required tools: Node 22+, pnpm, Git, Docker (engine running), Python + libs.
   2. Installs what is missing where it safely can (pnpm, Python libs), starts Docker Desktop.
   3. Syncs new settings into .env, pnpm install, starts Postgres + Redis, generates + runs
-     migrations, seeds demo data, lint, typecheck, tests, build, integration tests, and a
-     pnpm dev smoke test (API /health + dashboard /login answer, then everything is stopped).
+     migrations, seeds demo data, lint, typecheck, tests, build, integration tests with coverage,
+     a pnpm dev smoke test (API /health + dashboard /login answer), the Playwright end-to-end test
+     against those dev servers, then everything is stopped.
   Everything is logged to .claude-logs\doctor.log so Claude can read the result.
 
 .EXAMPLE
@@ -166,6 +167,12 @@ function Test-DevServers {
       }
     }
     $workerUp = (Test-Path $devLog) -and [bool](Select-String -Path $devLog -Pattern '\[worker\] listening' -Quiet)
+    # End-to-end test (T14) against the running dev servers (Playwright reuses them).
+    if ($api -eq 200 -and $web -eq 200 -and $workerUp -and $widget -eq 200) {
+      Invoke-Step 'End-to-end test (pnpm e2e)' { pnpm e2e } | Out-Null
+    } else {
+      Add-Result 'End-to-end test (pnpm e2e)' $false 'skipped: dev servers not up'
+    }
   } finally {
     $timer.Stop()
     & taskkill.exe /PID $proc.Id /T /F 2>&1 | Out-Null
@@ -317,7 +324,7 @@ if ($pnpm -and $installed -and -not $SkipChecks) {
   Invoke-Step 'Unit tests (pnpm test)' { pnpm test } | Out-Null
   Invoke-Step 'Build (pnpm build)' { pnpm build } | Out-Null
   if ($dbReady) {
-    Invoke-Step 'Integration tests (pnpm test:integration)' { pnpm test:integration } | Out-Null
+    Invoke-Step 'Integration tests + coverage (pnpm test:coverage)' { pnpm test:coverage } | Out-Null
     Test-DevServers
   } else {
     Add-Result 'Integration tests' $false 'skipped: database not ready'

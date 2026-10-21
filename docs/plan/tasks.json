@@ -507,9 +507,9 @@
       "week": "Week 6",
       "title": "Tests",
       "notes": "Unit, integration, eval set",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-21",
+      "completed": "2026-10-21",
       "est_hours": 8,
       "depends": [
         "T13"

@@ -29,6 +29,13 @@ async function answer(question: string, passages: string[]) {
 }
 
 describe('MockLlmProvider', () => {
+  it('keeps a sentence that is wrapped over two lines together', async () => {
+    const result = await answer('When do weekend orders ship?', [
+      'You get a tracking link by email. Orders placed on a\nweekend are dispatched on Monday.\n\n- Next line is separate.',
+    ]);
+    expect(result.text).toBe('Orders placed on a weekend are dispatched on Monday [1].');
+  });
+
   it('answers from the matching passage and cites it', async () => {
     const result = await answer('How long is the frame warranty?', [
       'Orders ship in 3-5 business days.',

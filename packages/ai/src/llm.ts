@@ -122,6 +122,9 @@ export class MockLlmProvider implements LlmProvider {
       const context = new Set(keywords(match[2] ?? ''));
       const sentences = match[3]!
         .replace(/\*\*|__|`/g, '')
+        // Soft-wrapped lines belong to one sentence; blank lines, bullets, tables, headings and
+        // numbered steps still start a new one (found by the eval set, T14).
+        .replace(/\n(?!\s*(?:\n|[-*|#]|\d+\.))/g, ' ')
         .split(/(?<=[.!?])\s+|\n+/)
         .map((s) => s.replace(/^\s*(?:[-*]|\d+\.)\s+/, '').trim())
         // Drop table separators, FAQ questions and very short fragments.
