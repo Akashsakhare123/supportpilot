@@ -125,7 +125,7 @@ After a rollback, re-run the smoke test job (Actions > Deploy > Re-run) or curl 
 - **Errors:** Sentry (free tier) when `SENTRY_DSN` is set on the API and worker: unexpected API
   errors (5xx) and ingestion jobs that failed for good, with PII masked and no request bodies.
 
-### Go-live checklist (one-time)
+### Go-live checklist (one-time; click-by-click version: [GO_LIVE.md](GO_LIVE.md))
 
 1. Push the repository to GitHub and turn on branch protection (below).
 2. Railway: new project with **Postgres** (template with pgvector) and **Redis**; services `api`
