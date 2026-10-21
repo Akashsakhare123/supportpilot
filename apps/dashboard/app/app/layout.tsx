@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 const NAV: { href: string; label: string; minRole: Role }[] = [
   { href: '/app', label: 'Overview', minRole: 'agent' },
   { href: '/app/inbox', label: 'Inbox', minRole: 'agent' },
+  { href: '/app/analytics', label: 'Analytics', minRole: 'admin' },
   { href: '/app/knowledge', label: 'Knowledge base', minRole: 'admin' },
   { href: '/app/playground', label: 'Test assistant', minRole: 'agent' },
   { href: '/app/team', label: 'Team', minRole: 'admin' },

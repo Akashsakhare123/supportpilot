@@ -57,6 +57,13 @@
       "when": 1792403750541,
       "tag": "0007_safe_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792571851186,
+      "tag": "0008_old_medusa",
+      "breakpoints": true
     }
   ]
 }

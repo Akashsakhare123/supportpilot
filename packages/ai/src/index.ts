@@ -6,3 +6,4 @@ export * from './pipeline';
 export * from './confidence';
 export * from './llm';
 export * from './prompt';
+export * from './cluster';

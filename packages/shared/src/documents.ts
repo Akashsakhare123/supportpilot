@@ -22,6 +22,15 @@ export const addUrlDocumentSchema = z.object({
 });
 export type AddUrlDocumentInput = z.infer<typeof addUrlDocumentSchema>;
 
+/** A short article written in the dashboard ("Add doc" from the unanswered-questions report). */
+export const addTextDocumentSchema = z
+  .object({
+    title: z.string().trim().min(3, 'Give the article a title').max(200),
+    content: z.string().trim().min(20, 'Write at least a sentence or two').max(50_000),
+  })
+  .strict();
+export type AddTextDocumentInput = z.infer<typeof addTextDocumentSchema>;
+
 /** A knowledge-base document as the dashboard lists it. */
 export interface DocumentSummary {
   id: string;

@@ -1,6 +1,11 @@
 // Type-only imports from @supportpilot/shared keep zod out of the bundle; the typing helper comes
 // from the zod-free `@supportpilot/shared/typing` entry.
-import type { ChatSource, HistoryMessage, WidgetConfig } from '@supportpilot/shared';
+import type {
+  ChatSource,
+  HistoryMessage,
+  MessageFeedback,
+  WidgetConfig,
+} from '@supportpilot/shared';
 import { createTypingNotifier, TYPING, type TypingNotifier } from '@supportpilot/shared/typing';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { connectWidget, type WidgetSocket } from './connection';
@@ -24,6 +29,8 @@ interface Line {
   createdAt?: string;
   /** Customer message an agent has read (read receipt). */
   seen?: boolean;
+  /** The customer's thumbs up / down on an AI answer. */
+  feedback?: MessageFeedback | null;
 }
 
 const HUMAN_REQUEST = "I'd like to talk to a person, please.";
@@ -38,6 +45,7 @@ function fromHistory(m: HistoryMessage): Line {
     text: m.content,
     sources: m.sources,
     createdAt: m.createdAt,
+    feedback: m.feedback ?? null,
   };
 }
 
@@ -66,6 +74,23 @@ function lastServerId(lines: Line[]): string | null {
     if (line.role !== 'notice' && !line.pending && !isLocal(line.id)) return line.id;
   }
   return null;
+}
+
+function ThumbIcon({ down }: { down?: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={down ? { transform: 'rotate(180deg)' } : undefined}
+    >
+      <path
+        d="M7 10v10H4V10h3Zm2 10h8.2a2 2 0 0 0 2-1.6l1.2-6A2 2 0 0 0 18.4 10H14l.8-4a1.6 1.6 0 0 0-3-1L9 10v10Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
 }
 
 function ChatIcon() {
@@ -331,6 +356,19 @@ export function App({ publicKey, apiUrl }: AppProps) {
     showAgentTyping,
   ]);
 
+  /** Thumbs up / down on an AI answer; clicking the same thumb again takes it back. */
+  function rate(line: Line, choice: MessageFeedback) {
+    const conversationId = load(conversationKey);
+    const s = socket.current;
+    if (!conversationId || !s?.connected || isLocal(line.id)) return;
+    const previous = line.feedback ?? null;
+    const feedback = previous === choice ? null : choice;
+    update(line.id, { feedback });
+    s.emit('message:feedback', { conversationId, messageId: line.id, feedback }, (result) => {
+      if (!result.ok) update(line.id, { feedback: previous });
+    });
+  }
+
   /** "Load earlier messages": the page before the oldest message shown. */
   function loadEarlier() {
     const conversationId = load(conversationKey);
@@ -469,6 +507,26 @@ export function App({ publicKey, apiUrl }: AppProps) {
                       <p>{line.text}</p>
                     )}
                     {line.sources && <Sources sources={line.sources} />}
+                  </div>
+                )}
+                {line.role === 'ai' && !line.pending && !isLocal(line.id) && (
+                  <div class="sp-rate" role="group" aria-label="Was this answer helpful?">
+                    <button
+                      type="button"
+                      aria-label="Helpful"
+                      aria-pressed={line.feedback === 'up'}
+                      onClick={() => rate(line, 'up')}
+                    >
+                      <ThumbIcon />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Not helpful"
+                      aria-pressed={line.feedback === 'down'}
+                      onClick={() => rate(line, 'down')}
+                    >
+                      <ThumbIcon down />
+                    </button>
                   </div>
                 )}
                 {line === lastCustomer && line.seen && <span class="sp-seen">Seen</span>}

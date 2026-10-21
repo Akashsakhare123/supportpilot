@@ -101,7 +101,10 @@ export class HandoffService {
     // Online agents only: someone who set themselves to "away" cannot pick it up now.
     const agentsOnline = (await this.presence.onlineCount(tenantId)) > 0;
     if (conversation.status !== 'ai') return { status: conversation.status, agentsOnline };
-    const moved = await this.move(tenantId, conversation, 'waiting', { handoffReason: reason });
+    const moved = await this.move(tenantId, conversation, 'waiting', {
+      handoffReason: reason,
+      firstHandoffAt: conversation.firstHandoffAt ?? new Date(),
+    });
     if (!moved) return { status: conversation.status, agentsOnline };
     await this.inbox.addMessage(tenantId, conversation.id, {
       sender: 'system',
@@ -132,7 +135,11 @@ export class HandoffService {
       tenantId,
       current,
       'human',
-      { assignedAgentId: userId, lowConfidenceStreak: 0 },
+      {
+        assignedAgentId: userId,
+        lowConfidenceStreak: 0,
+        firstHandoffAt: current.firstHandoffAt ?? new Date(),
+      },
       sql`${conversations.assignedAgentId} is null`,
     );
     if (!won) {

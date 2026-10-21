@@ -10,6 +10,7 @@ import {
 import type { Tenant } from '@supportpilot/db';
 import {
   conversationReadSchema,
+  messageFeedbackSchema,
   offlineEmailSchema,
   typingSchema,
   WIDGET_LIMITS,
@@ -40,6 +41,8 @@ interface SocketState {
   sent: number[];
   /** Timestamps of recent typing events (flood protection). */
   typing: number[];
+  /** Timestamps of recent thumbs up / down clicks (flood protection). */
+  feedback: number[];
 }
 
 type WidgetSocket = Socket<
@@ -98,6 +101,7 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
             busy: false,
             sent: [],
             typing: [],
+            feedback: [],
           };
           next();
         })
@@ -229,6 +233,23 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
     if (history === 'unknown_cursor') return fail('invalid', 'Unknown message id');
     await socket.join(rooms.conversation(parsed.data.conversationId));
     return { ok: true, ...history };
+  }
+
+  /** Thumbs up / down on an AI answer (analytics, T12). Only the visitor's own conversation. */
+  @SubscribeMessage('message:feedback')
+  async feedback(
+    @ConnectedSocket() socket: WidgetSocket,
+    @MessageBody() body: unknown,
+  ): Promise<ReturnType<typeof fail> | { ok: true }> {
+    const state = socket.data;
+    if (!state?.tenant) return fail('invalid', 'Not connected');
+    const parsed = messageFeedbackSchema.safeParse(body);
+    if (!parsed.success) return fail('invalid', 'Invalid feedback');
+    if (!withinRate(state.feedback, WIDGET_LIMITS.feedbackPer10s, 10_000)) {
+      return fail('rate_limited', 'Please wait a moment');
+    }
+    const saved = await this.chat.rateMessage(state.tenant.id, state.visitorId, parsed.data);
+    return saved ? { ok: true } : fail('conversation_not_found', 'Message not found');
   }
 
   /** The customer is typing: relayed to the tenant's agents (no ack, flood-limited). */

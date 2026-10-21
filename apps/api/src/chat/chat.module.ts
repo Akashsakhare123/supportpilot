@@ -17,6 +17,6 @@ import { WidgetGateway } from './widget.gateway';
     { provide: LLM_PROVIDER, useFactory: () => createLlmProvider(process.env) },
     { provide: EMBEDDING_PROVIDER, useFactory: () => createEmbeddingProvider(process.env) },
   ],
-  exports: [ChatService],
+  exports: [ChatService, EMBEDDING_PROVIDER],
 })
 export class ChatModule {}

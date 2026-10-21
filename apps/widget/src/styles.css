@@ -157,11 +157,36 @@
   background: #fafbfc;
 }
 .sp-line {
+  flex-wrap: wrap;
   display: flex;
 }
 .sp-customer {
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+.sp-rate {
+  flex-basis: 100%;
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+.sp-rate button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 6px;
+  color: #a3a7b9;
+}
+.sp-rate button:hover {
+  color: #4b5068;
+  background: rgba(0, 0, 0, 0.05);
+}
+.sp-rate button:focus-visible {
+  outline: 2px solid var(--sp-brand);
+}
+.sp-rate button[aria-pressed='true'] {
+  color: var(--sp-brand);
 }
 .sp-seen {
   flex-basis: 100%;

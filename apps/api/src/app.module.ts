@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
@@ -30,6 +31,7 @@ import { WidgetModule } from './widget/widget.module';
     DocumentsModule,
     ChatModule,
     InboxModule,
+    AnalyticsModule,
     HealthModule,
   ],
   controllers: [AppController],

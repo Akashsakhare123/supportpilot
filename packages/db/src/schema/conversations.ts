@@ -21,6 +21,8 @@ export const conversationStatus = pgEnum('conversation_status', [
   'closed',
 ]);
 export const messageSender = pgEnum('message_sender', ['customer', 'ai', 'agent', 'system']);
+/** The customer's thumbs up / down on an AI answer (T12). */
+export const messageFeedback = pgEnum('message_feedback', ['up', 'down']);
 
 /** One chat between a website visitor and the tenant (AI first, a human agent after handoff). */
 export const conversations = pgTable(
@@ -38,6 +40,11 @@ export const conversations = pgTable(
     lowConfidenceStreak: integer('low_confidence_streak').notNull().default(0),
     /** Why it went to "waiting": customer_request | low_confidence (T10). */
     handoffReason: text('handoff_reason'),
+    /**
+     * First time the chat went to a person (waiting or claimed). Kept after "Hand back to AI",
+     * so analytics can tell AI-resolved chats from handed-off ones (T12).
+     */
+    firstHandoffAt: timestamp('first_handoff_at', { withTimezone: true }),
     /** Left by the customer when no agent was online (offline ticket). */
     contactEmail: text('contact_email'),
     /** Last time an agent opened the conversation (unread counts in the inbox, T11). */
@@ -53,6 +60,8 @@ export const conversations = pgTable(
   (t) => [
     index('conversations_tenant_status_idx').on(t.tenantId, t.status, t.lastMessageAt),
     index('conversations_tenant_visitor_idx').on(t.tenantId, t.visitorId),
+    /** Analytics: conversations started in a date range (T12). */
+    index('conversations_tenant_created_idx').on(t.tenantId, t.createdAt),
   ],
 );
 
@@ -74,6 +83,8 @@ export const messages = pgTable(
     sources: jsonb('sources').$type<ChatSource[]>().notNull().default([]),
     confidence: real('confidence'),
     needsHuman: boolean('needs_human').notNull().default(false),
+    /** Thumbs up / down from the customer (AI answers only). */
+    feedback: messageFeedback('feedback'),
     /** Model, latency, retrieval scores, PII kinds masked... (debugging and analytics). */
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

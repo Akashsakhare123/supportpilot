@@ -30,6 +30,7 @@ import {
   type ChatDone,
   type ChatSource,
   LOW_CONFIDENCE_LIMIT,
+  type MessageFeedbackInput,
   redactPii,
   WIDGET_LIMITS,
   type WidgetHistory,
@@ -439,12 +440,39 @@ export class ChatService {
         content: m.content,
         sources: m.sources,
         createdAt: m.createdAt.toISOString(),
+        ...(m.sender === 'ai' ? { feedback: m.feedback } : {}),
       })),
       hasMore: page.hasMore,
       status: conversation.status,
       unread: Number(unread?.count ?? 0),
       agentReadAt: conversation.agentReadAt?.toISOString() ?? null,
     };
+  }
+
+  /**
+   * Thumbs up / down (or null to take it back) on an AI answer in the visitor's own conversation.
+   * False when the message is not an AI answer of this tenant's, visitor's conversation.
+   */
+  async rateMessage(
+    tenantId: string,
+    visitorId: string,
+    input: MessageFeedbackInput,
+  ): Promise<boolean> {
+    const updated = await this.db
+      .update(messages)
+      .set({ feedback: input.feedback })
+      .where(
+        and(
+          eq(messages.id, input.messageId),
+          eq(messages.conversationId, input.conversationId),
+          eq(messages.tenantId, tenantId),
+          eq(messages.sender, 'ai'),
+          sql`exists (select 1 from ${conversations} c where c.id = ${messages.conversationId}
+            and c.tenant_id = ${tenantId} and c.visitor_id = ${visitorId})`,
+        ),
+      )
+      .returning({ id: messages.id });
+    return updated.length > 0;
   }
 
   /** Messages of a conversation, oldest first (playground history, tests). */

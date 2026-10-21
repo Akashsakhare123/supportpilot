@@ -439,9 +439,9 @@
       "week": "Week 5",
       "title": "Analytics dashboard",
       "notes": "AI vs. human resolution, top questions, unanswered questions",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-21",
+      "completed": "2026-10-21",
       "est_hours": 7,
       "depends": [
         "T10"

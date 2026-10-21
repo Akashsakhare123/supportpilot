@@ -113,6 +113,11 @@ function MessageBubble({ message, seen }: { message: AgentMessage; seen?: boolea
                   Needs a person
                 </span>
               )}
+              {message.feedback && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                  Customer rated {message.feedback === 'up' ? 'helpful' : 'not helpful'}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -142,6 +147,12 @@ export default function InboxPage() {
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const userId = user?.id ?? '';
+
+  // Deep link from Analytics (?c=<conversation id>) opens that conversation.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('c');
+    if (id && /^[0-9a-f-]{36}$/i.test(id)) setSelected(id);
+  }, []);
 
   const loadList = useCallback(async () => {
     const res = await apiFetch(`/conversations?tab=${tab}`);

@@ -9,9 +9,9 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 ## Progress
 
 <!-- AUTO:PROGRESS -->
-![progress](https://img.shields.io/badge/progress-11%2F17%20tasks-3B3F8C)
+![progress](https://img.shields.io/badge/progress-12%2F17%20tasks-3B3F8C)
 
-`[#############-------] 65%` - currently on **T12 Analytics dashboard**
+`[##############------] 71%` - currently on **T13 Stripe billing and plan limits**
 
 | Milestone | Release | Progress |
 |---|---|---|
@@ -19,7 +19,7 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 | M2 Knowledge base | v0.2.0 | 3/3 (done) |
 | M3 AI chat MVP | v0.3.0 | 2/2 (done) |
 | M4 Human handoff | v0.4.0 | 3/3 (done) |
-| M5 Business features | v0.5.0 | 0/2 (planned) |
+| M5 Business features | v0.5.0 | 1/2 (in progress) |
 | M6 Production ready | v1.0.0 | 0/4 (planned) |
 
 Full plan: [docs/PLAN.md](docs/PLAN.md) · Build log: [docs/PROGRESS.md](docs/PROGRESS.md)

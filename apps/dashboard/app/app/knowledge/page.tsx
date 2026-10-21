@@ -47,7 +47,15 @@ export default function KnowledgePage() {
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [url, setUrl] = useState('');
+  const [article, setArticle] = useState<{ title: string; content: string } | null>(null);
+  const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // "Add doc" from the unanswered-questions report: /app/knowledge?topic=<question>.
+  useEffect(() => {
+    const topic = new URLSearchParams(window.location.search).get('topic');
+    if (topic) setArticle({ title: topic.slice(0, 200), content: '' });
+  }, []);
 
   const load = useCallback(async () => {
     const res = await apiFetch('/documents');
@@ -119,6 +127,30 @@ export default function KnowledgePage() {
     setUrl('');
     setNotice('Web page queued for import.');
     await load();
+  }
+
+  async function saveArticle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!article) return;
+    setError(null);
+    setNotice(null);
+    setSaving(true);
+    try {
+      const res = await apiFetch('/documents/text', {
+        method: 'POST',
+        body: JSON.stringify(article),
+      });
+      if (!res.ok) {
+        setError(await readError(res));
+        return;
+      }
+      setArticle(null);
+      window.history.replaceState(null, '', '/app/knowledge');
+      setNotice('Article saved. The AI can use it as soon as it shows Ready.');
+      await load();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function action(doc: DocumentSummary, kind: 'reindex' | 'delete') {
@@ -202,6 +234,49 @@ export default function KnowledgePage() {
           </p>
         </Card>
       </div>
+
+      {article ? (
+        <Card>
+          <CardTitle>Write an answer</CardTitle>
+          <CardDescription>
+            A short article in your own words. It is added to the knowledge base like an uploaded
+            file, so the AI can answer this question next time.
+          </CardDescription>
+          <form method="post" onSubmit={saveArticle} className="mt-4 space-y-3">
+            <Input
+              required
+              minLength={3}
+              maxLength={200}
+              value={article.title}
+              onChange={(e) => setArticle({ ...article, title: e.target.value })}
+              aria-label="Article title"
+              placeholder="Title, e.g. Do you sell skateboards?"
+            />
+            <textarea
+              required
+              minLength={20}
+              rows={6}
+              value={article.content}
+              onChange={(e) => setArticle({ ...article, content: e.target.value })}
+              aria-label="Article text"
+              placeholder="The answer, as you would explain it to a customer."
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-slate-400 focus-visible:border-brand focus-visible:outline-2 focus-visible:outline-brand/30"
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving...' : 'Add to knowledge base'}
+              </Button>
+              <Button variant="ghost" onClick={() => setArticle(null)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </Card>
+      ) : (
+        <Button variant="outline" onClick={() => setArticle({ title: '', content: '' })}>
+          Write an article
+        </Button>
+      )}
 
       {error && <Alert>{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}

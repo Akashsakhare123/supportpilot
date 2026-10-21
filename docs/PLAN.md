@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[#############-------] 65%`  **11 / 17 tasks done** (66 / 108 est. hours)  
-Last update: 2026-10-19  
-**Current / next task:** T12 Analytics dashboard (Not started)
+`[##############------] 71%`  **12 / 17 tasks done** (73 / 108 est. hours)  
+Last update: 2026-10-21  
+**Current / next task:** T13 Stripe billing and plan limits (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -29,7 +29,7 @@ Last update: 2026-10-19
 | [T09](#t09---agent-inbox) | Week 4 | Agent inbox | Done | 2026-10-19 |
 | [T10](#t10---handoff-logic) | Week 4 | Handoff logic | Done | 2026-10-19 |
 | [T11](#t11---typing-presence-history) | Week 4 | Typing, presence, history | Done | 2026-10-19 |
-| [T12](#t12---analytics-dashboard) | Week 5 | Analytics dashboard | Not started |  |
+| [T12](#t12---analytics-dashboard) | Week 5 | Analytics dashboard | Done | 2026-10-21 |
 | [T13](#t13---stripe-billing-and-plan-limits) | Week 5 | Stripe billing and plan limits | Not started |  |
 | [T14](#t14---tests) | Week 6 | Tests | Not started |  |
 | [T15](#t15---security-hardening) | Week 6 | Security hardening | Not started |  |
@@ -46,7 +46,7 @@ Last update: 2026-10-19
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 3/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 2/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 3/3 |
-| Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 0/2 |
+| Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 1/2 |
 | Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 0/4 |
 <!-- /AUTO:MILESTONES -->
 
@@ -394,23 +394,23 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T12 - Analytics dashboard
 
-`Not started` · est. 7 h · depends on: T10
+`Done` · est. 7 h · depends on: T10 · completed 2026-10-21
 
 **Goal:** Show the client the value of the AI and exactly which docs are missing.
 
 **Subtasks**
 
-- [ ] KPIs: conversations, AI-resolved %, handoff %, avg first response time, thumbs up/down rating
-- [ ] Top questions: group similar questions by embedding similarity
-- [ ] Unanswered questions report: low-confidence / handed-off questions grouped, with an 'Add doc' shortcut
-- [ ] Date range filter, charts (Recharts), Redis cache for 5 minutes
-- [ ] CSV export
+- [x] KPIs: conversations, AI-resolved %, handoff %, avg first response time, thumbs up/down rating
+- [x] Top questions: group similar questions by embedding similarity
+- [x] Unanswered questions report: low-confidence / handed-off questions grouped, with an 'Add doc' shortcut
+- [x] Date range filter, charts (Recharts), Redis cache for 5 minutes
+- [x] CSV export
 
 **Acceptance criteria**
 
-- [ ] Seeded demo data shows meaningful charts
-- [ ] Unanswered report lists questions the AI failed on, with counts
-- [ ] Every analytics query is tenant-scoped (test)
+- [x] Seeded demo data shows meaningful charts
+- [x] Unanswered report lists questions the AI failed on, with counts
+- [x] Every analytics query is tenant-scoped (test)
 
 **Deliverables:** Analytics API, Analytics page, Unanswered questions report  
 **Standout feature:** Unanswered questions report  

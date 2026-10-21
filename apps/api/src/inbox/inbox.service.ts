@@ -252,6 +252,7 @@ export class InboxService {
       createdAt: row.createdAt.toISOString(),
       confidence: row.confidence,
       needsHuman: row.needsHuman,
+      feedback: row.feedback,
       authorName,
     };
   }

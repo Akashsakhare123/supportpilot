@@ -53,8 +53,11 @@ export default function OverviewPage() {
           <Card>
             <CardTitle>Next up</CardTitle>
             <CardDescription>
-              Upload your help docs to the knowledge base (T04), then the AI starts answering from
-              them (T07).
+              Check{' '}
+              <Link href="/app/analytics" className="text-brand hover:underline">
+                Analytics
+              </Link>{' '}
+              for questions the AI could not answer, and add a help article for each one.
             </CardDescription>
           </Card>
         )}

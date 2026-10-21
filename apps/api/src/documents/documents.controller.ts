@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  type AddTextDocumentInput,
+  addTextDocumentSchema,
   type AddUrlDocumentInput,
   addUrlDocumentSchema,
   type DocumentSummary,
@@ -60,6 +62,15 @@ export class DocumentsController {
     @Body(new ZodValidationPipe(addUrlDocumentSchema)) body: AddUrlDocumentInput,
   ): Promise<DocumentSummary> {
     return this.documents.addUrl(auth, body);
+  }
+
+  /** A short article written in the dashboard, stored as a markdown file and ingested like one. */
+  @Post('text')
+  addText(
+    @Auth() auth: AuthContext,
+    @Body(new ZodValidationPipe(addTextDocumentSchema)) body: AddTextDocumentInput,
+  ): Promise<DocumentSummary> {
+    return this.documents.addText(auth, body);
   }
 
   @Post(':id/reindex')

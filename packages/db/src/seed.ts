@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { replaceDocumentChunks } from './chunks';
+import { seedDemoConversations } from './seed-conversations';
 import { createDb, createPool, type Database } from './index';
 import { documentChunks, documents, tenants, users } from './schema';
 
@@ -142,6 +143,12 @@ async function main(): Promise<void> {
     console.log(`Widget key: ${DEMO_PUBLIC_KEY}`);
 
     await seedKnowledgeBase(db, tenant!.id);
+
+    const agent = await db.query.users.findFirst({
+      where: eq(users.email, 'agent@acme.test'),
+      columns: { id: true },
+    });
+    await seedDemoConversations(db, tenant!.id, agent?.id ?? null);
   } finally {
     await pool.end();
   }

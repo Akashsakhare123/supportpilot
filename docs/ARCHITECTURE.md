@@ -194,6 +194,7 @@ erDiagram
     uuid assigned_agent_id FK
     timestamptz agent_read_at
     timestamptz visitor_read_at
+    timestamptz first_handoff_at
   }
   messages {
     uuid id PK
@@ -202,6 +203,7 @@ erDiagram
     text content
     jsonb sources
     real confidence
+    text feedback "up, down"
   }
   subscriptions {
     uuid id PK
@@ -333,6 +335,15 @@ Providers come from env. `LLM_PROVIDER=mock` (default) is an offline extractive 
 - **Read receipts and unread**: `POST /conversations/:id/read` (agent opens the conversation, or a customer message arrives while it is open and visible) sets `agent_read_at`, clears the unread count and sends `conversation:read` to the widget ("Seen" under the customer's last message). The widget emits `conversation:read` while the chat is open, which sets `visitor_read_at` ("Seen" under the agent's last reply). Unread counts only customer messages in `waiting` / `human` conversations. The widget launcher shows a count badge.
 - **Reconnects**: the widget asks for messages `after` the last one it has and merges them without duplicates. If too much was missed, it reloads the latest page. The dashboard does the same for the open conversation and refetches the list.
 
+## 6h. Analytics (T12)
+
+- **API** (admin+): `GET /analytics?from&to&tz[&fresh=1]` returns KPIs, one row per day, top questions and the unanswered-questions report in one response; `GET /analytics/export?report=daily|questions|unanswered` returns the same data as CSV (UTF-8 with BOM for Excel). Dates are inclusive local days in the viewer's IANA time zone (validated); the default is the last 30 days, the maximum 366.
+- **KPIs**: conversations, AI-resolved (no person ever involved) vs handed off, average first response (customer's first message -> first AI or agent reply), average agent response after a hand-off, AI answers, thumbs up / down and the satisfaction rate. `conversations.first_handoff_at` is set the first time a chat goes to `waiting` or is claimed and survives "Hand back to AI", so a chat that bounced back still counts as handed off. Migration 0008 backfills it for older chats.
+- **Ratings**: the widget shows thumbs up / down under every AI answer (`message:feedback` socket event, own conversation and AI messages only, 10 clicks per 10 s, clicking again takes the rating back). Agents see the rating in the inbox.
+- **Question reports**: the newest 2,000 customer questions in the range are paired with the reply that came next. "Talk to a person" requests are left out, PII is masked. Each distinct text (lower-cased, punctuation trimmed) is embedded once with the tenant's embedding model and grouped by greedy centroid clustering (`packages/ai/src/cluster.ts`, threshold per model: 0.42 for the lexical offline model, 0.7 for OpenAI small). A question is *unanswered* when the AI's answer had low confidence, found nothing (`no_answer`), or got a thumbs down. Each group shows its count, reasons, other wordings, the last time it was asked, links to up to three chats and an **Add doc** button that opens Knowledge base with a "Write an answer" form (`POST /documents/text`, stored as a `.md` upload and ingested like any file). If the embedding provider fails, grouping falls back to the offline model.
+- **Tenant scoping**: every query filters `tenant_id` on conversations *and* on messages (defence in depth) and excludes playground chats; the Redis cache key is `analytics:v1:{tenant}:{from}:{to}:{tz}` with a 5-minute TTL. Integration tests check that another tenant's identical questions never appear and that two tenants with the same range get separate cache entries.
+- **Dashboard**: `/app/analytics` with presets (7 / 30 / 90 days) and a custom range, KPI tiles, two Recharts bar charts (conversations stacked AI-resolved / handed off; helpful / not helpful) plus a table view, the unanswered report, top questions and CSV buttons. `pnpm db:seed` adds about 30 days of demo chats (`v_demo_` visitors, deterministic) so the page has meaningful data.
+
 ## 7. Real-time events *(contract in `packages/shared/src/realtime.ts`)*
 
 | Namespace | Event | Direction | Payload |
@@ -450,5 +461,10 @@ never pull in `node:fs`.
 | D51 | Keyset pagination on `(created_at, id)` with the cursor compared in SQL | Offset paging, cursor as a JS Date | Stable when new messages arrive and exact with Postgres microseconds; the same helper serves the widget, the agent view and reconnect sync. |
 | D52 | Read state as two timestamps on the conversation (`agent_read_at`, `visitor_read_at`) | Per-message receipts, per-agent read state | Enough for "Seen" and unread counts with no extra table; per-agent state can come later if teams need it. |
 | D53 | A zod-free `@supportpilot/shared/typing` entry for the widget | Duplicate the throttle in the widget | One tested implementation for both clients without bundling zod (D39). |
+| D54 | Analytics computed live from `conversations` / `messages` with a 5-minute Redis cache | Nightly rollup tables, a separate analytics store | Exact numbers for any range and time zone with no extra jobs; indexed queries on `(tenant_id, created_at)` are fast at this scale. Rollups can come later if a tenant grows large. |
+| D55 | `first_handoff_at` timestamp on the conversation | Infer hand-offs from system messages or `handoff_reason` | `handoff_reason` is cleared on hand back and system texts are for people; one column makes AI-resolved vs handed off a simple, indexed filter. |
+| D56 | Group questions at report time by embedding each distinct text once + greedy centroid clustering | Store a vector per message, k-means, an LLM to label topics | No schema or write-path cost, deterministic, a few hundred embeddings per report at most (and cached); thresholds are calibrated per embedding model like retrieval (D35). |
+| D57 | CSV cells starting with `= + - @` get a leading apostrophe | Export raw text | Customer questions are untrusted; this stops CSV formula injection when a client opens the export in Excel. |
+| D58 | "Add doc" writes a markdown upload through the normal upload path | A separate article table | Same file checks, storage, ingestion and re-index as any document; nothing new to maintain. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { and, type Database, desc, type DocumentRow, documents, eq } from '@supportpilot/db';
 import type {
+  AddTextDocumentInput,
   AddUrlDocumentInput,
   DocumentSourceType,
   DocumentStatus,
@@ -83,6 +84,25 @@ export class DocumentsService {
       await this.storage.delete(storageKey).catch(() => undefined);
       throw error;
     }
+  }
+
+  /**
+   * "Add doc" from the unanswered-questions report: the article becomes a .md upload, so it goes
+   * through the same checks, storage and ingestion as any uploaded file.
+   */
+  async addText(caller: AuthContext, input: AddTextDocumentInput): Promise<DocumentSummary> {
+    const slug =
+      input.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60) || 'article';
+    const markdown = `# ${input.title}\n\n${input.content}\n`;
+    return this.upload(
+      caller,
+      { originalname: `${slug}.md`, buffer: Buffer.from(markdown) },
+      input.title,
+    );
   }
 
   /** Queue a public web page for import. The worker re-checks the URL before fetching it. */

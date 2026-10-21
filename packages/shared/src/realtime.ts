@@ -17,6 +17,8 @@ export const WIDGET_LIMITS = {
   historyMessages: 50,
   /** Typing events per connection per 10 seconds; extra events are dropped silently. */
   typingPer10s: 20,
+  /** Thumbs up / down clicks per connection per 10 seconds. */
+  feedbackPer10s: 10,
 } as const;
 
 /** Page sizes for message history (widget and agent view). */
@@ -68,12 +70,25 @@ export type TypingInput = z.infer<typeof typingSchema>;
 /** The widget tells the API the visitor has seen the conversation (read receipt). */
 export const conversationReadSchema = z.object({ conversationId: z.string().uuid() }).strict();
 
+/** The customer rates an AI answer (T12); `null` takes the rating back. */
+export const messageFeedbackSchema = z
+  .object({
+    conversationId: z.string().uuid(),
+    messageId: z.string().uuid(),
+    feedback: z.enum(['up', 'down']).nullable(),
+  })
+  .strict();
+export type MessageFeedbackInput = z.infer<typeof messageFeedbackSchema>;
+export type MessageFeedback = 'up' | 'down';
+
 export interface HistoryMessage {
   id: string;
   sender: MessageSender;
   content: string;
   sources: ChatSource[];
   createdAt: string;
+  /** Thumbs up / down the customer gave this AI answer, if any. */
+  feedback?: MessageFeedback | null;
 }
 
 /** A page of messages, oldest first. */
@@ -143,6 +158,11 @@ export interface WidgetClientEvents {
   typing: (payload: TypingInput) => void;
   /** The visitor has the chat open and saw the latest messages. */
   'conversation:read': (payload: { conversationId: string }) => void;
+  /** Thumbs up / down on one of the AI's answers in the visitor's own conversation. */
+  'message:feedback': (
+    payload: MessageFeedbackInput,
+    ack: (result: { ok: true } | { ok: false; code: WidgetErrorCode; message: string }) => void,
+  ) => void;
 }
 
 // ---------------------------------------------------------------------------------------------
