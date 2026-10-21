@@ -52,7 +52,7 @@ Turborepo runs in strict env mode, so env vars a task needs must be listed in `t
 | `EVAL_ENABLED`, `EVAL_MIN_SCORE` | variables | eval | default min score 0.80 |
 | `LLM_API_KEY`, `EMBEDDING_API_KEY` | secrets | eval | never needed by normal CI (mocked) |
 
-Runtime secrets for the apps themselves (JWT secret, Stripe keys, LLM keys) live in Railway / Vercel project settings, not in GitHub.
+Runtime secrets for the apps themselves (JWT secret, Stripe keys, LLM keys) live in Railway / Vercel project settings, not in GitHub. Billing (T13) needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO` and `STRIPE_PRICE_BUSINESS` on the API, plus a Stripe webhook endpoint pointing at `https://<api>/billing/webhook`. CI needs none of them: the integration tests use fixed fake values and a fake Stripe gateway.
 
 ## Branch protection on `main`
 

@@ -9,4 +9,9 @@ export function loadTestEnv(): void {
   // Integration tests never call a paid AI API, whatever .env says.
   process.env.LLM_PROVIDER = 'mock';
   process.env.EMBEDDING_PROVIDER = 'local';
+  // Billing tests use a fake Stripe; fixed test values so a real key in .env is never used.
+  process.env.STRIPE_SECRET_KEY = 'sk_test_integration_fake';
+  process.env.STRIPE_WEBHOOK_SECRET = 'whsec_integration_test_secret';
+  process.env.STRIPE_PRICE_PRO = 'price_test_pro';
+  process.env.STRIPE_PRICE_BUSINESS = 'price_test_business';
 }

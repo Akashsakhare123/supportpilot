@@ -72,6 +72,8 @@ const rate = (part: number, whole: number) => (whole > 0 ? part / whole : null);
 /** The AI's own failure first (it knew it was unsure), then the customer's thumbs down. */
 function failureOf(row: QuestionRow): UnansweredReason | null {
   if (row.answer_sender !== 'ai') return null;
+  // At the plan limit the AI did not try; the chat went to the team (T13).
+  if (row.reason === 'plan_limit') return null;
   if (row.needs_human) {
     return row.reason === 'no_relevant_passages' || row.reason === 'llm_error'
       ? 'no_answer'

@@ -7,7 +7,7 @@ import { loadEnv } from './config/env';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
-  const app = configureApp(await NestFactory.create(AppModule), env);
+  const app = configureApp(await NestFactory.create(AppModule, { rawBody: true }), env);
   await app.listen(env.API_PORT);
   Logger.log(`API listening on http://localhost:${env.API_PORT} (health: /health)`, 'Bootstrap');
 }

@@ -5,7 +5,13 @@ import { jsonb, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core
 export const tenants = pgTable('tenants', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  /**
+   * Effective plan (free | pro | business). Written only by the Stripe webhook sync (T13), never
+   * from a client request; limits are read from it.
+   */
   plan: text('plan').notNull().default('free'),
+  /** Stripe customer (cus_...), created at the first checkout. */
+  stripeCustomerId: text('stripe_customer_id').unique(),
   /** Identifies the tenant to the widget (pk_live_...). Safe to expose, rotatable. */
   publicKey: text('public_key').notNull().unique(),
   branding: jsonb('branding').$type<TenantBranding>().notNull().default({}),

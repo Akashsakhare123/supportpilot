@@ -39,11 +39,12 @@ export function assertTransition(from: ConversationStatus, to: ConversationStatu
   if (!canTransition(from, to)) throw new InvalidTransitionError(from, to);
 }
 
-export type HandoffReason = 'customer_request' | 'low_confidence';
+export type HandoffReason = 'customer_request' | 'low_confidence' | 'plan_limit';
 
 export const HANDOFF_REASON_LABELS: Record<HandoffReason, string> = {
   customer_request: 'Customer asked for a person',
   low_confidence: 'AI was not confident twice in a row',
+  plan_limit: 'Monthly AI answer limit reached',
 };
 
 /** Two low-confidence answers in a row hand the conversation to a person. */

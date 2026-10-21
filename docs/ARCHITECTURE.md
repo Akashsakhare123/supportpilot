@@ -153,11 +153,13 @@ erDiagram
   users ||--o{ conversations : "assigned agent"
   tenants ||--o| subscriptions : billed_by
   tenants ||--o{ usage_events : records
+  tenants ||--o{ stripe_events : "applied for"
 
   tenants {
     uuid id PK
     text name
-    text plan
+    text plan "free, pro, business (from webhooks)"
+    text stripe_customer_id UK
     text public_key UK
     jsonb branding
     jsonb allowed_domains
@@ -207,11 +209,20 @@ erDiagram
   }
   subscriptions {
     uuid id PK
-    uuid tenant_id FK
+    uuid tenant_id FK "unique"
     text stripe_customer_id
-    text stripe_subscription_id
-    text plan
-    text status
+    text stripe_subscription_id UK
+    text stripe_price_id
+    text plan "pro, business"
+    text status "Stripe status"
+    timestamptz current_period_end
+    bool cancel_at_period_end
+    timestamptz payment_failed_at
+  }
+  stripe_events {
+    text id PK "Stripe event id"
+    text type
+    uuid tenant_id FK
   }
   usage_events {
     bigint id PK
@@ -344,6 +355,16 @@ Providers come from env. `LLM_PROVIDER=mock` (default) is an offline extractive 
 - **Tenant scoping**: every query filters `tenant_id` on conversations *and* on messages (defence in depth) and excludes playground chats; the Redis cache key is `analytics:v1:{tenant}:{from}:{to}:{tz}` with a 5-minute TTL. Integration tests check that another tenant's identical questions never appear and that two tenants with the same range get separate cache entries.
 - **Dashboard**: `/app/analytics` with presets (7 / 30 / 90 days) and a custom range, KPI tiles, two Recharts bar charts (conversations stacked AI-resolved / handed off; helpful / not helpful) plus a table view, the unanswered report, top questions and CSV buttons. `pnpm db:seed` adds about 30 days of demo chats (`v_demo_` visitors, deterministic) so the page has meaningful data.
 
+## 6i. Billing and plan limits (T13)
+
+- **Plans** live in code (`packages/shared/src/billing.ts`): Free (100 AI answers a month, 5 documents, 1 agent), Pro ($49: 2,000 / 100 / 5) and Business ($199: 10,000 / 1,000 / 25). "Agents" are team members other than the owner plus pending invites; AI answers are `chat.answer` usage events in the current calendar month (UTC).
+- **Stripe is the source of truth.** `POST /billing/checkout {plan}` (owner) creates the tenant's Stripe customer once (idempotency key per tenant) and returns a Checkout URL; the client only names `pro` or `business`, the price ids come from env. A tenant with a live subscription is sent to `POST /billing/portal` (Customer Portal: switch plan, card, invoices, cancel). Nothing changes on our side until a webhook arrives.
+- **Webhook** `POST /billing/webhook` (public; the signature is the authentication): the Stripe-Signature HMAC is checked over the raw request body (`rawBody: true`, 5-minute tolerance). Already-seen event ids return `{ duplicate: true }` at once. For `checkout.session.completed`, `customer.subscription.created / updated / deleted` and `invoice.payment_failed` the subscription is **re-read from Stripe** (latest state, so out-of-order or late events cannot roll a plan back), then one transaction inserts the event id into `stripe_events` (primary key; a parallel delivery loses the insert and does nothing) and upserts `subscriptions` + `tenants.plan`. A Stripe outage gives a 500, so Stripe retries later.
+- **Tenant mapping**: by `tenants.stripe_customer_id` first; the checkout's `client_reference_id` / subscription metadata are only used to claim a customer for a tenant that has none, so an event can never move a customer or a plan to another tenant. Effective plan = the price's plan while `active`, `trialing` or `past_due` (grace while Stripe retries), else Free. An older subscription ending does not cancel a newer active one. Unknown prices map to Free.
+- **Limits**: `PlanLimitsService` reads the plan from the tenant row on every check (so an upgrade applies at once, even to open widget sockets) and counts usage from the database. `@PlanLimit('documents')` on the three upload routes and `@PlanLimit('agents')` on invites return **402** with a readable message. In `ChatService` the AI-answer check runs before retrieval: at the limit the visitor gets no AI answer and is never told about the plan; the chat goes to `waiting` (reason `plan_limit`) like "talk to a person", so online agents pick it up and otherwise the widget shows the leave-your-email form. That reply is not metered and is left out of the unanswered report. Playground tests see an "upgrade" note instead.
+- **Dashboard** `/app/billing` (owner): current plan and status, renewal / cancellation date, payment-failed warning, usage meters (amber at 80%, red at the limit), plan cards with Upgrade (Checkout) or Manage billing (Portal). Back from Checkout it polls `GET /billing` until the webhook has applied the new plan.
+- **Without Stripe keys** the page still shows plan and usage and upgrades are off (503 with a clear message). Integration tests swap the Stripe gateway for a fake but sign every webhook with the real SDK.
+
 ## 7. Real-time events *(contract in `packages/shared/src/realtime.ts`)*
 
 | Namespace | Event | Direction | Payload |
@@ -466,5 +487,11 @@ never pull in `node:fs`.
 | D56 | Group questions at report time by embedding each distinct text once + greedy centroid clustering | Store a vector per message, k-means, an LLM to label topics | No schema or write-path cost, deterministic, a few hundred embeddings per report at most (and cached); thresholds are calibrated per embedding model like retrieval (D35). |
 | D57 | CSV cells starting with `= + - @` get a leading apostrophe | Export raw text | Customer questions are untrusted; this stops CSV formula injection when a client opens the export in Excel. |
 | D58 | "Add doc" writes a markdown upload through the normal upload path | A separate article table | Same file checks, storage, ingestion and re-index as any document; nothing new to maintain. |
+| D59 | Plan state only from verified Stripe webhooks; the webhook re-reads the subscription from Stripe | Trust the event payload, set the plan on the Checkout success redirect | The redirect can be forged and events can arrive late or out of order; the latest Stripe state applied idempotently is always right. |
+| D60 | Idempotency by inserting the event id (primary key) in the same transaction as the change | Redis "seen" keys, Stripe's ordering | A replay or a parallel duplicate delivery can never apply twice, and a failed apply rolls the id back so Stripe's retry works. |
+| D61 | Plans and limits in code, prices in env, `tenants.plan` as the effective plan | Limits in Stripe product metadata, a plans table | Limits are reviewed and tested with the code; one indexed column answers "which plan" on every check. |
+| D62 | Monthly AI usage counted live from `usage_events` (calendar month, UTC) | A Redis counter, Stripe metered billing | Exact, already recorded since T07, one indexed count per message; a counter can come later if volume needs it. |
+| D63 | At the AI limit the chat goes to the team (waiting / email form), not an error | Refuse the message, keep answering and bill overage | The customer's visitor still gets help and never sees the business's plan; the business keeps every lead. |
+| D64 | A small `StripeGateway` interface around the SDK | Call the SDK everywhere, nock HTTP in tests | Tests run offline with a fake while webhook signatures are still checked by the real SDK. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

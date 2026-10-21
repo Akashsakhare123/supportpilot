@@ -22,6 +22,7 @@ import {
 } from '@supportpilot/shared';
 import type { AuthContext } from '../auth/auth.types';
 import { Auth, Roles } from '../auth/decorators';
+import { PlanLimit } from '../billing/plan-limit.guard';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { DocumentsService } from './documents.service';
 
@@ -45,6 +46,7 @@ export class DocumentsController {
 
   /** multipart/form-data: file (PDF, .txt, .md, max 10 MB) and optional title. */
   @Post()
+  @PlanLimit('documents')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: UPLOAD_LIMITS.maxBytes, files: 1, fields: 5 } }),
   )
@@ -57,6 +59,7 @@ export class DocumentsController {
   }
 
   @Post('url')
+  @PlanLimit('documents')
   addUrl(
     @Auth() auth: AuthContext,
     @Body(new ZodValidationPipe(addUrlDocumentSchema)) body: AddUrlDocumentInput,
@@ -66,6 +69,7 @@ export class DocumentsController {
 
   /** A short article written in the dashboard, stored as a markdown file and ingested like one. */
   @Post('text')
+  @PlanLimit('documents')
   addText(
     @Auth() auth: AuthContext,
     @Body(new ZodValidationPipe(addTextDocumentSchema)) body: AddTextDocumentInput,

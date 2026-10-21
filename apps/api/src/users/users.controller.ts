@@ -7,6 +7,7 @@ import {
 } from '@supportpilot/shared';
 import type { AuthContext } from '../auth/auth.types';
 import { Auth, Roles } from '../auth/decorators';
+import { PlanLimit } from '../billing/plan-limit.guard';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { UsersService } from './users.service';
 
@@ -22,6 +23,7 @@ export class UsersController {
   }
 
   @Post('invites')
+  @PlanLimit('agents')
   invite(
     @Auth() auth: AuthContext,
     @Body(new ZodValidationPipe(inviteSchema)) body: InviteInput,

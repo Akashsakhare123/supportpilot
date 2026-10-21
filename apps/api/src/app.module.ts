@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
+import { BillingModule } from './billing/billing.module';
 import { ChatModule } from './chat/chat.module';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
@@ -25,6 +26,7 @@ import { WidgetModule } from './widget/widget.module';
     RealtimeModule,
     StorageModule,
     AuthModule,
+    BillingModule,
     UsersModule,
     TenantModule,
     WidgetModule,

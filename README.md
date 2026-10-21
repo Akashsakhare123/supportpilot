@@ -9,9 +9,9 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 ## Progress
 
 <!-- AUTO:PROGRESS -->
-![progress](https://img.shields.io/badge/progress-12%2F17%20tasks-3B3F8C)
+![progress](https://img.shields.io/badge/progress-13%2F17%20tasks-3B3F8C)
 
-`[##############------] 71%` - currently on **T13 Stripe billing and plan limits**
+`[###############-----] 76%` - currently on **T14 Tests**
 
 | Milestone | Release | Progress |
 |---|---|---|
@@ -19,7 +19,7 @@ A business uploads its knowledge base, pastes one `<script>` tag on its site, an
 | M2 Knowledge base | v0.2.0 | 3/3 (done) |
 | M3 AI chat MVP | v0.3.0 | 2/2 (done) |
 | M4 Human handoff | v0.4.0 | 3/3 (done) |
-| M5 Business features | v0.5.0 | 1/2 (in progress) |
+| M5 Business features | v0.5.0 | 2/2 (done) |
 | M6 Production ready | v1.0.0 | 0/4 (planned) |
 
 Full plan: [docs/PLAN.md](docs/PLAN.md) · Build log: [docs/PROGRESS.md](docs/PROGRESS.md)
@@ -111,3 +111,21 @@ Demo logins (after `pnpm db:seed`): `owner@acme.test`, `admin@acme.test`, `agent
 Checks: `pnpm lint && pnpm typecheck && pnpm test` · integration tests (needs Docker running): `pnpm test:integration`
 
 Postgres runs on host port **5434** so it never clashes with a locally installed PostgreSQL on 5432 / 5433.
+
+### Stripe billing (optional, test mode)
+
+Plans: **Free** (100 AI answers a month, 5 documents, 1 agent), **Pro** and **Business** (`packages/shared/src/billing.ts`).
+Without Stripe keys the Billing page (owner login) shows the plan and usage meters, and upgrades are switched off.
+To try a real test-mode upgrade:
+
+1. In the Stripe dashboard (test mode) create two products with a monthly recurring price (e.g. Pro $49, Business $199),
+   and in **Settings > Billing > Customer portal** allow switching between those two prices and cancelling.
+2. Put `STRIPE_SECRET_KEY` (sk_test_...), `STRIPE_PRICE_PRO` and `STRIPE_PRICE_BUSINESS` (price_...) in `.env`.
+3. Install the [Stripe CLI](https://docs.stripe.com/stripe-cli) (`scoop install stripe` or the Windows zip), run
+   `stripe login`, then `pnpm stripe:listen`. Copy the printed `whsec_...` into `STRIPE_WEBHOOK_SECRET` and restart `pnpm dev`.
+4. Sign in as `owner@acme.test`, open **Billing**, click **Upgrade to Pro** and pay with card `4242 4242 4242 4242`
+   (any future date, any CVC). Back on the Billing page the plan switches to Pro once the webhook arrives.
+   `stripe trigger invoice.payment_failed` or cancelling in **Manage billing** shows the other paths.
+
+The webhook (`POST /billing/webhook`) checks the Stripe signature over the raw body, re-reads the subscription from
+Stripe and applies each event id once, so replays (`stripe events resend evt_...`) change nothing.

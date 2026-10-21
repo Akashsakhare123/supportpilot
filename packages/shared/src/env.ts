@@ -9,6 +9,10 @@ export const baseEnvSchema = z.object({
   REDIS_URL: z.string().url(),
 });
 
+/** An optional env var where an empty value (KEY= in .env) means "not set". */
+const optional = <T extends ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+
 /** Env vars for the API. Validated once at startup. */
 export const apiEnvSchema = baseEnvSchema.extend({
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -28,6 +32,22 @@ export const apiEnvSchema = baseEnvSchema.extend({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(14),
   /** Force the Secure cookie flag on/off; defaults to on in production. */
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
+  /**
+   * Stripe billing (T13), all optional: without them billing shows plans and usage but upgrades
+   * are off. Use test-mode keys (sk_test_...) in development.
+   */
+  STRIPE_SECRET_KEY: optional(
+    z.string().startsWith('sk_', 'STRIPE_SECRET_KEY must start with sk_'),
+  ),
+  STRIPE_WEBHOOK_SECRET: optional(
+    z.string().startsWith('whsec_', 'STRIPE_WEBHOOK_SECRET must start with whsec_'),
+  ),
+  STRIPE_PRICE_PRO: optional(
+    z.string().startsWith('price_', 'STRIPE_PRICE_PRO must be a price id'),
+  ),
+  STRIPE_PRICE_BUSINESS: optional(
+    z.string().startsWith('price_', 'STRIPE_PRICE_BUSINESS must be a price id'),
+  ),
 });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;

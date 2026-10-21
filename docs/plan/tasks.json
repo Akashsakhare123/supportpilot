@@ -472,9 +472,9 @@
       "week": "Week 5",
       "title": "Stripe billing and plan limits",
       "notes": "Subscriptions and usage_events",
-      "status": "Not started",
-      "started": null,
-      "completed": null,
+      "status": "Done",
+      "started": "2026-10-21",
+      "completed": "2026-10-21",
       "est_hours": 8,
       "depends": [
         "T03",

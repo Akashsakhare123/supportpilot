@@ -12,9 +12,9 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 ## Progress
 
 <!-- AUTO:STATUS -->
-`[##############------] 71%`  **12 / 17 tasks done** (73 / 108 est. hours)  
+`[###############-----] 76%`  **13 / 17 tasks done** (81 / 108 est. hours)  
 Last update: 2026-10-21  
-**Current / next task:** T13 Stripe billing and plan limits (Not started)
+**Current / next task:** T14 Tests (Not started)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -30,7 +30,7 @@ Last update: 2026-10-21
 | [T10](#t10---handoff-logic) | Week 4 | Handoff logic | Done | 2026-10-19 |
 | [T11](#t11---typing-presence-history) | Week 4 | Typing, presence, history | Done | 2026-10-19 |
 | [T12](#t12---analytics-dashboard) | Week 5 | Analytics dashboard | Done | 2026-10-21 |
-| [T13](#t13---stripe-billing-and-plan-limits) | Week 5 | Stripe billing and plan limits | Not started |  |
+| [T13](#t13---stripe-billing-and-plan-limits) | Week 5 | Stripe billing and plan limits | Done | 2026-10-21 |
 | [T14](#t14---tests) | Week 6 | Tests | Not started |  |
 | [T15](#t15---security-hardening) | Week 6 | Security hardening | Not started |  |
 | [T16](#t16---cicd-and-deployment) | Week 6 | CI/CD and deployment | Not started |  |
@@ -46,7 +46,7 @@ Last update: 2026-10-21
 | Week 2 | Oct 26 - Nov 1 | M2 Knowledge base | v0.2.0 | Docs (PDF / text / URL) are ingested in the background into pgvector. | 3/3 |
 | Week 3 | Nov 2 - Nov 8 | M3 AI chat MVP | v0.3.0 | First demo: a script-tag widget answers from the tenant's docs with sources. | 2/2 |
 | Week 4 | Nov 9 - Nov 15 | M4 Human handoff | v0.4.0 | Low-confidence chats escalate to a live agent inbox in real time. | 3/3 |
-| Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 1/2 |
+| Week 5 | Nov 16 - Nov 22 | M5 Business features | v0.5.0 | Analytics (incl. unanswered questions) and Stripe billing with plan limits. | 2/2 |
 | Week 6 | Nov 23 - Nov 29 | M6 Production ready | v1.0.0 | Tested, hardened, deployed live with README, diagram and demo video. | 0/4 |
 <!-- /AUTO:MILESTONES -->
 
@@ -418,25 +418,25 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T13 - Stripe billing and plan limits
 
-`Not started` · est. 8 h · depends on: T03, T07
+`Done` · est. 8 h · depends on: T03, T07 · completed 2026-10-21
 
 **Goal:** Real SaaS billing: plans, upgrades and limits enforced from usage.
 
 **Subtasks**
 
-- [ ] Plans in config: Free (100 AI msgs/mo, 5 docs, 1 agent), Pro, Business
-- [ ] Stripe Checkout for upgrades and Customer Portal for manage / cancel
-- [ ] Webhook endpoint with signature verification, idempotent by event id
-- [ ] Handle checkout.session.completed, customer.subscription.updated / deleted, invoice.payment_failed
-- [ ] subscriptions table synced from webhooks (Stripe is the source of truth)
-- [ ] PlanLimitGuard reads monthly usage_events; at the limit the widget falls back to 'leave a message'
-- [ ] Billing page: current plan, usage meters, upgrade CTA
+- [x] Plans in config: Free (100 AI msgs/mo, 5 docs, 1 agent), Pro, Business
+- [x] Stripe Checkout for upgrades and Customer Portal for manage / cancel
+- [x] Webhook endpoint with signature verification, idempotent by event id
+- [x] Handle checkout.session.completed, customer.subscription.updated / deleted, invoice.payment_failed
+- [x] subscriptions table synced from webhooks (Stripe is the source of truth)
+- [x] PlanLimitGuard reads monthly usage_events; at the limit the widget falls back to 'leave a message'
+- [x] Billing page: current plan, usage meters, upgrade CTA
 
 **Acceptance criteria**
 
-- [ ] Test-mode upgrade works end to end (Stripe CLI webhook forwarding)
-- [ ] Exceeding the Free limit blocks AI answers gracefully
-- [ ] A replayed webhook does not double-apply
+- [x] Test-mode upgrade works end to end (Stripe CLI webhook forwarding)
+- [x] Exceeding the Free limit blocks AI answers gracefully
+- [x] A replayed webhook does not double-apply
 
 **Deliverables:** Billing module, Webhook handler, Billing page  
 **Interview talking point:** Webhooks are verified and idempotent, and plan state is derived from Stripe, never trusted from the client.

@@ -10,3 +10,4 @@ export * from './realtime';
 export * from './handoff';
 export * from './typing';
 export * from './analytics';
+export * from './billing';

@@ -23,6 +23,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "progress": "python scripts/progress.py",
+    "stripe:listen": "stripe listen --forward-to localhost:4000/billing/webhook --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed",
     "prepare": "husky"
   },
   "devDependencies": {

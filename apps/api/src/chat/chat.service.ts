@@ -36,6 +36,7 @@ import {
   type WidgetHistory,
   type WidgetHistoryRequest,
 } from '@supportpilot/shared';
+import { AI_ANSWER_EVENT, PlanLimitsService } from '../billing/plan-limits.service';
 import { loadMessagePage } from '../common/message-page';
 import { DRIZZLE } from '../database/database.module';
 import { HANDOFF_TEXT, HandoffService } from '../handoff/handoff.service';
@@ -52,6 +53,12 @@ export const CHAT_TEXT = {
     "I'm sorry, I couldn't find that in our help articles. Would you like me to connect you with a person from our team?",
   error:
     "Sorry, I'm having trouble answering right now. Would you like me to connect you with a person from our team?",
+  /** Monthly AI answers used up (T13). Visitors are never told about the business's plan. */
+  limitTeam: 'Thanks for your message. A person from our team will reply here shortly.',
+  limitOffline:
+    "Thanks for your message. Our team isn't online right now. Leave your email below and we'll get back to you.",
+  limitPlayground:
+    "This workspace has used all of this month's AI answers. Upgrade on the Billing page to keep testing; customers are handed to your team meanwhile.",
 } as const;
 
 export interface ChatTurnInput {
@@ -83,6 +90,7 @@ export class ChatService {
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
     private readonly inbox: InboxService,
     private readonly handoff: HandoffService,
+    private readonly limits: PlanLimitsService,
   ) {}
 
   /**
@@ -145,6 +153,10 @@ export class ChatService {
         conversationStatus: conversation.status,
       };
     }
+
+    // Plan limit (T13): no AI answer; the message goes to the team ("leave a message").
+    const quota = await this.limits.check(tenant.id, 'aiAnswers');
+    if (!quota.allowed) return this.limitReached(tenant, conversation, started, sink);
 
     if (asksForHuman(message)) {
       // Real conversations go to "waiting" (playground tests only show the reply).
@@ -301,6 +313,37 @@ export class ChatService {
     return this.afterAnswer(tenant, conversation, done);
   }
 
+  /**
+   * The tenant used all its AI answers this month: hand the chat to the team (the widget shows
+   * the email form when nobody is online). The reply is stored but not metered.
+   */
+  private async limitReached(
+    tenant: Tenant,
+    conversation: ConversationRow,
+    started: number,
+    sink: ChatSink,
+  ): Promise<ChatDone> {
+    const handoff = isPlayground(conversation)
+      ? null
+      : await this.handoff.requestHuman(tenant.id, conversation, 'plan_limit');
+    const text = !handoff
+      ? CHAT_TEXT.limitPlayground
+      : handoff.agentsOnline
+        ? CHAT_TEXT.limitTeam
+        : CHAT_TEXT.limitOffline;
+    sink.delta(text);
+    const done = await this.finish(tenant, conversation, started, {
+      content: text,
+      sources: [],
+      confidence: 0,
+      needsHuman: true,
+      metadata: { reason: 'plan_limit' },
+      resetStreak: true,
+      metered: false,
+    });
+    return { ...done, conversationStatus: handoff?.status ?? done.conversationStatus };
+  }
+
   /** Low confidence twice in a row: hand the conversation to a person (ai -> waiting). */
   private async afterAnswer(
     tenant: Tenant,
@@ -355,6 +398,8 @@ export class ChatService {
       metadata: Record<string, unknown>;
       /** A handoff starts now, so the low-confidence streak starts over. */
       resetStreak?: boolean;
+      /** Counts toward the plan's monthly AI answers (default true). */
+      metered?: boolean;
     },
   ): Promise<ChatDone> {
     const latencyMs = Date.now() - started;
@@ -376,11 +421,13 @@ export class ChatService {
         answer.needsHuman && !answer.resetStreak ? conversation.lowConfidenceStreak + 1 : 0,
     });
     await this.notifyInbox(tenant.id, saved!);
-    await this.db.insert(usageEvents).values({
-      tenantId: tenant.id,
-      type: 'chat.answer',
-      metadata: { conversationId: conversation.id, model: this.llm.model, latencyMs },
-    });
+    if (answer.metered !== false) {
+      await this.db.insert(usageEvents).values({
+        tenantId: tenant.id,
+        type: AI_ANSWER_EVENT,
+        metadata: { conversationId: conversation.id, model: this.llm.model, latencyMs },
+      });
+    }
     return {
       conversationId: conversation.id,
       messageId: saved!.id,

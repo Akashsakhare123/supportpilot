@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 import { createDb, createPool, tenants, users } from '@supportpilot/db';
 import { hash } from '@node-rs/argon2';
 import { randomUUID } from 'node:crypto';
@@ -7,9 +7,13 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { loadEnv } from '../src/config/env';
 
-export async function createTestApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = configureApp(moduleRef.createNestApplication(), loadEnv());
+/** The API as main.ts builds it; `override` can swap providers (e.g. a fake Stripe). */
+export async function createTestApp(
+  override: (builder: TestingModuleBuilder) => TestingModuleBuilder = (b) => b,
+): Promise<INestApplication> {
+  const moduleRef = await override(Test.createTestingModule({ imports: [AppModule] })).compile();
+  // rawBody: true like main.ts (Stripe webhook signatures are checked over the raw body).
+  const app = configureApp(moduleRef.createNestApplication({ rawBody: true }), loadEnv());
   await app.init();
   return app;
 }
@@ -23,8 +27,14 @@ export interface TestTenant {
   agent: { id: string; email: string };
 }
 
-/** A fresh tenant with one user per role. Unique emails, so test runs never collide. */
-export async function createTestTenant(label = 'Test Co'): Promise<TestTenant> {
+/**
+ * A fresh tenant with one user per role. Unique emails, so test runs never collide. Business plan
+ * by default, so suites that are not about billing never run into plan limits (T13).
+ */
+export async function createTestTenant(
+  label = 'Test Co',
+  plan: 'free' | 'pro' | 'business' = 'business',
+): Promise<TestTenant> {
   const pool = createPool(process.env.DATABASE_URL!, { max: 1 });
   const db = createDb(pool);
   const run = randomUUID().slice(0, 8);
@@ -32,7 +42,11 @@ export async function createTestTenant(label = 'Test Co'): Promise<TestTenant> {
     const passwordHash = await hash(TEST_PASSWORD);
     const [tenant] = await db
       .insert(tenants)
-      .values({ name: `${label} ${run}`, publicKey: `pk_test_${run}_${randomUUID().slice(0, 8)}` })
+      .values({
+        name: `${label} ${run}`,
+        plan,
+        publicKey: `pk_test_${run}_${randomUUID().slice(0, 8)}`,
+      })
       .returning();
     const make = (role: 'owner' | 'admin' | 'agent') => ({
       tenantId: tenant!.id,

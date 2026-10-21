@@ -64,6 +64,13 @@
       "when": 1792571851186,
       "tag": "0008_old_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792574791099,
+      "tag": "0009_lonely_captain_marvel",
+      "breakpoints": true
     }
   ]
 }
