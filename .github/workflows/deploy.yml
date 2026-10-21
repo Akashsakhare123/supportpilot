@@ -35,7 +35,7 @@ jobs:
     environment: production
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SHA }}
       - uses: pnpm/action-setup@v4
@@ -73,7 +73,7 @@ jobs:
       matrix:
         service: [api, worker]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SHA }}
       - name: Build and deploy the Docker image
@@ -96,7 +96,7 @@ jobs:
           - app: widget
             project: VERCEL_WIDGET_PROJECT_ID
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SHA }}
       - name: Build and deploy on Vercel
