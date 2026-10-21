@@ -578,8 +578,8 @@
       "week": "Week 6",
       "title": "CI/CD and deployment",
       "notes": "Docker, GitHub Actions, live demo",
-      "status": "Not started",
-      "started": null,
+      "status": "In progress",
+      "started": "2026-10-21",
       "completed": null,
       "est_hours": 7,
       "depends": [

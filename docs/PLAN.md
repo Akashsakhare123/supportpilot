@@ -14,7 +14,7 @@ Do not edit the blocks between `AUTO` markers by hand; edit `tasks.json` and re-
 <!-- AUTO:STATUS -->
 `[##################--] 88%`  **15 / 17 tasks done** (95 / 108 est. hours)  
 Last update: 2026-10-21  
-**Current / next task:** T16 CI/CD and deployment (Not started)
+**Current / next task:** T16 CI/CD and deployment (In progress)
 
 | ID | Week | Task | Status | Completed |
 |---|---|---|---|---|
@@ -33,7 +33,7 @@ Last update: 2026-10-21
 | [T13](#t13---stripe-billing-and-plan-limits) | Week 5 | Stripe billing and plan limits | Done | 2026-10-21 |
 | [T14](#t14---tests) | Week 6 | Tests | Done | 2026-10-21 |
 | [T15](#t15---security-hardening) | Week 6 | Security hardening | Done | 2026-10-21 |
-| [T16](#t16---cicd-and-deployment) | Week 6 | CI/CD and deployment | Not started |  |
+| [T16](#t16---cicd-and-deployment) | Week 6 | CI/CD and deployment | **In progress** |  |
 | [T17](#t17---readme-architecture-diagram-demo-video) | Week 6 | README, architecture diagram, demo video | Not started |  |
 <!-- /AUTO:STATUS -->
 
@@ -497,7 +497,7 @@ T07 (RAG chat) is the biggest and riskiest task. If a week slips, cut from T11 (
 
 #### T16 - CI/CD and deployment
 
-`Not started` · est. 7 h · depends on: T14
+`In progress` · est. 7 h · depends on: T14
 
 **Goal:** Merge to main and it is live, with no manual steps.
 

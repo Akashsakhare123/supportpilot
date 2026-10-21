@@ -132,7 +132,9 @@ export class WidgetGateway implements OnGatewayInit, OnGatewayConnection {
       `tenant:${tenantId}:visitor:${socket.data.visitorId}`,
       rooms.widgets(tenantId),
     ]);
-    socket.emit('presence', { agentsOnline: (await this.presence.onlineCount(tenantId)) > 0 });
+    // Redis can be gone during shutdown; a presence hint is not worth an unhandled rejection.
+    const online = await this.presence.onlineCount(tenantId).catch(() => 0);
+    socket.emit('presence', { agentsOnline: online > 0 });
   }
 
   /** Only conversations this socket opened or loaded (both join the room after the owner check). */

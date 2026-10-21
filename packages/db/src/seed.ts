@@ -5,7 +5,7 @@
 import { hash } from '@node-rs/argon2';
 import { createEmbeddingProvider, embedDocument } from '@supportpilot/ai';
 import { DEFAULT_BRANDING } from '@supportpilot/shared';
-import { LocalFileStorage, loadDotEnv, resolveStorageDir } from '@supportpilot/shared/node';
+import { createFileStorage, loadDotEnv } from '@supportpilot/shared/node';
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
@@ -44,7 +44,7 @@ function titleOf(markdown: string, file: string): string {
 
 /** Store, chunk and embed the demo articles. Skips ones already embedded with the current model. */
 async function seedKnowledgeBase(db: Database, tenantId: string): Promise<void> {
-  const storage = new LocalFileStorage(resolveStorageDir(process.env, __dirname));
+  const storage = createFileStorage(process.env, __dirname);
   const embeddings = createEmbeddingProvider(process.env);
   const files = (await readdir(SEED_DOCS_DIR)).filter(
     (f) => f.endsWith('.md') && f !== 'README.md',
@@ -129,6 +129,21 @@ async function main(): Promise<void> {
         .values({ ...DEMO_TENANT, onboardingCompletedAt: new Date() })
         .returning();
       console.log('Created demo tenant "Acme Bikes".');
+    }
+
+    // Production demo (T16): DEMO_ALLOWED_DOMAINS=demo.example.com,... lets the public demo page
+    // embed the Acme widget. Added to the list, never removed.
+    const extraDomains = (process.env.DEMO_ALLOWED_DOMAINS ?? '')
+      .split(',')
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean);
+    const missing = extraDomains.filter((d) => !tenant!.allowedDomains.includes(d));
+    if (missing.length) {
+      await db
+        .update(tenants)
+        .set({ allowedDomains: [...tenant!.allowedDomains, ...missing], updatedAt: new Date() })
+        .where(eq(tenants.id, tenant!.id));
+      console.log(`Demo tenant: allowed domains + ${missing.join(', ')}`);
     }
 
     const passwordHash = await hash(DEMO_PASSWORD);

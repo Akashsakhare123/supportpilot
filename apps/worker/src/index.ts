@@ -1,27 +1,24 @@
 import { createEmbeddingProvider } from '@supportpilot/ai';
 import { createDb, createPool } from '@supportpilot/db';
 import { CHANNELS, QUEUES } from '@supportpilot/shared';
-import {
-  LocalFileStorage,
-  loadDotEnv,
-  redisOptionsFromUrl,
-  resolveStorageDir,
-} from '@supportpilot/shared/node';
+import { createFileStorage, loadDotEnv, redisOptionsFromUrl } from '@supportpilot/shared/node';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import type { Server } from 'node:http';
 import { loadWorkerEnv } from './env';
+import { initMonitoring, reportJobFailure } from './monitoring';
 import { createDocumentRepository } from './repository';
 import { createIngestionWorker } from './worker';
 
 loadDotEnv(__dirname);
 const env = loadWorkerEnv();
+initMonitoring();
 const connection = redisOptionsFromUrl(env.REDIS_URL);
 
 const pool = createPool(env.DATABASE_URL, { max: env.WORKER_CONCURRENCY + 2 });
 const publisher = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
 const embeddings = createEmbeddingProvider(process.env);
-const storage = new LocalFileStorage(resolveStorageDir(process.env, __dirname));
+const storage = createFileStorage(process.env, __dirname);
 
 const worker = createIngestionWorker({
   queueName: QUEUES.ingestion,
@@ -41,11 +38,12 @@ worker.on('ready', () =>
     `[worker] listening on queue "${QUEUES.ingestion}" (concurrency ${env.WORKER_CONCURRENCY}, embeddings ${embeddings.model}, storage ${storage.root})`,
   ),
 );
-worker.on('failed', (job, error) =>
+worker.on('failed', (job, error) => {
   console.error(
     `[worker] job ${job?.id} attempt ${job?.attemptsMade ?? '?'} failed: ${error.message}`,
-  ),
-);
+  );
+  reportJobFailure(error, job);
+});
 worker.on('stalled', (jobId) => console.warn(`[worker] job ${jobId} stalled, it will be retried`));
 worker.on('error', (error) => console.error(`[worker] ${error.message}`));
 

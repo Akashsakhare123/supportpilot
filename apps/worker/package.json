@@ -2,6 +2,9 @@
   "name": "@supportpilot/worker",
   "version": "0.0.0",
   "private": true,
+  "files": [
+    "dist"
+  ],
   "description": "SupportPilot background worker: BullMQ ingestion jobs",
   "scripts": {
     "build": "tsup",
@@ -16,6 +19,7 @@
   "dependencies": {
     "@bull-board/api": "^6.5.0",
     "@bull-board/express": "^6.5.0",
+    "@sentry/node": "^11.8.0",
     "@supportpilot/ai": "workspace:*",
     "@supportpilot/db": "workspace:*",
     "@supportpilot/shared": "workspace:*",

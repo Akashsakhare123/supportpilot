@@ -110,13 +110,18 @@ export class AgentGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
       return;
     }
     await socket.join(rooms.tenant(socket.data.tenantId));
-    socket.emit('presence:update', { agents: await this.presence.snapshot(socket.data.tenantId) });
+    const agents = await this.presence.snapshot(socket.data.tenantId).catch(() => null);
+    if (agents) socket.emit('presence:update', { agents });
     this.logger.debug(`agent ${socket.data.userId} connected`);
   }
 
   async handleDisconnect(socket: AgentSocket): Promise<void> {
     if (!socket.data?.tenantId) return;
-    await this.presence.leave(socket.data.tenantId, socket.data.userId, socket.id);
+    // Sockets also disconnect while the API shuts down, after Redis may be closed: the presence
+    // key then expires by its TTL, so a failure here is harmless.
+    await this.presence
+      .leave(socket.data.tenantId, socket.data.userId, socket.id)
+      .catch((error: unknown) => this.logger.debug(`presence leave skipped: ${String(error)}`));
   }
 
   /** Every PRESENCE.heartbeatMs from each open tab; refreshes the TTL. */

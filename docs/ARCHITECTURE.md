@@ -404,8 +404,8 @@ Agent commands that change data (claim, reply, hand back, close, read) are REST 
 ```
 supportpilot/
 ├─ apps/
-│  ├─ api/          NestJS: REST + Socket.io gateways (health today; auth, tenants, chat... next)
-│  ├─ worker/       BullMQ worker (ingestion queue)
+│  ├─ api/          NestJS: REST + Socket.io gateways, Dockerfile
+│  ├─ worker/       BullMQ worker (ingestion queue), Dockerfile
 │  ├─ dashboard/    Next.js App Router + Tailwind v4
 │  └─ widget/       Preact + Vite library build -> dist/widget.js (Shadow DOM)
 ├─ packages/
@@ -413,6 +413,7 @@ supportpilot/
 │  ├─ db/           Drizzle client, schema, SQL migrations, migrate + seed scripts, chunk search
 │  └─ shared/       zod schemas, env parsing, queue names, shared types (browser-safe index + /node entry)
 ├─ infra/postgres/  init.sql (creates the integration-test database)
+├─ infra/railway/   Railway service config (Dockerfile path, health check)
 ├─ e2e/             Playwright end-to-end test (signup -> widget -> hand-off -> agent reply)
 ├─ evals/           RAG eval set (acme-bikes.json); runner in apps/api/src/eval
 ├─ docs/            PLAN, ARCHITECTURE, PIPELINE, WORKFLOW, TESTING, PROGRESS, plan/tasks.json
@@ -506,5 +507,10 @@ never pull in `node:fs`.
 | D72 | Fixed-window Redis rate limits in Express middleware before routing, failing open | `@nestjs/throttler`, in-memory counters, sliding windows | Shared by every API instance, also covers 404s and login before the auth guard, one round trip per rule; an outage of the limiter must not take the product down. |
 | D73 | Strip injected instructions from the question and guard the output stream | Refuse any message with a suspicious phrase, rely on the prompt alone | The customer's real question still gets answered (same answer as without the attack), the model never sees the instruction, and a leaking model is cut off mid-stream. |
 | D74 | Mask PII in the logger itself | Remember to redact at every log call | One place, also catches error messages and stack traces from libraries. |
+| D75 | `pnpm deploy --prod` inside a multi-stage Dockerfile per service (node:22-alpine, non-root) | Copy the whole monorepo with dev dependencies, bundle everything with esbuild | Only production dependencies of that one app ship (about 116 MB of node_modules for the API); workspace packages are included as built `dist/` folders; native modules are installed for Alpine in the build stage. |
+| D76 | Railway for API, worker, Postgres (pgvector) and Redis; Vercel for dashboard and widget | One VM with docker compose, Fly.io, Render | Managed Postgres with pgvector and Redis next to the containers, health-checked zero-downtime deploys; Vercel gives the Next.js app and the static widget a CDN plus PR previews. Render stays the fallback. |
+| D77 | Uploads in an S3-compatible bucket (R2) in production behind the same `FileStorage` interface | A shared volume, storing files in Postgres | The API and worker run on different machines; R2 has no egress fees; local disk stays the zero-setup default in development. |
+| D78 | Deploy jobs in GitHub Actions (migrate -> parallel deploys -> smoke) instead of platform auto-deploys | Railway / Vercel auto-deploy from git | One ordered pipeline: migrations always run before new code, nothing deploys when CI is red, and the smoke test checks the whole system. |
+| D79 | Sentry only when `SENTRY_DSN` is set, 5xx and final job failures only, PII scrubbed | Always-on APM, report every error | Free-tier friendly and quiet: validation and auth errors are expected behaviour, not incidents. |
 
 New decisions are added here as tasks complete (also noted in PROGRESS.md).

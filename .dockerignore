@@ -1,0 +1,15 @@
+# Keep the Docker build context small and free of secrets (T16).
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+.data
+.claude-logs
+.git
+test-results
+playwright-report
+evals/report.*
+.env
+.env.*
+!.env.example
