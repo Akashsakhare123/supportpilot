@@ -19,7 +19,7 @@
   "dependencies": {
     "@bull-board/api": "^6.5.0",
     "@bull-board/express": "^6.5.0",
-    "@sentry/node": "^11.8.0",
+    "@sentry/node": "^11.9.0",
     "@supportpilot/ai": "workspace:*",
     "@supportpilot/db": "workspace:*",
     "@supportpilot/shared": "workspace:*",
